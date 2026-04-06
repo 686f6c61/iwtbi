@@ -1,0 +1,2218 @@
+---
+/**
+ * Página de análisis — consume el stream SSE del backend y muestra el progreso
+ * de los 7 agentes y el documento generado en tiempo real.
+ *
+ * Rutas que llegan aquí:
+ * - /analyze?url=https://github.com/usuario/repo  (desde el formulario de la home)
+ * - /usuario/repo  (truco de URL, nginx hace el rewrite a esta ruta)
+ */
+import Layout from "../layouts/Layout.astro";
+
+const AGENTS = [
+  { id: "sherlock",     label: "Grace Hopper",    sublabel: "Stack tecnológico",  wiki: "https://es.wikipedia.org/wiki/Grace_Hopper" },
+  { id: "frank",        label: "Alan Kay",         sublabel: "Arquitectura",       wiki: "https://es.wikipedia.org/wiki/Alan_Kay" },
+  { id: "oracle",       label: "Barbara Liskov",   sublabel: "Base de datos",      wiki: "https://es.wikipedia.org/wiki/Barbara_Liskov" },
+  { id: "hermes",       label: "Roy Fielding",     sublabel: "API y contratos",    wiki: "https://es.wikipedia.org/wiki/Roy_Fielding" },
+  { id: "picasso",      label: "Hedy Lamarr",      sublabel: "Frontend",           wiki: "https://es.wikipedia.org/wiki/Hedy_Lamarr" },
+  { id: "turing",       label: "Donald Knuth",     sublabel: "Lógica de negocio",  wiki: "https://es.wikipedia.org/wiki/Donald_Knuth" },
+  { id: "macgyver",     label: "Lynn Conway",      sublabel: "DevOps y despliegue", wiki: "https://es.wikipedia.org/wiki/Lynn_Conway" },
+  { id: "synthesizer",  label: "Tim Berners-Lee",  sublabel: "Integrador",         wiki: "https://es.wikipedia.org/wiki/Tim_Berners-Lee" },
+];
+---
+
+<Layout title="Analizando repositorio">
+  <!-- Popup modal: solicita email antes de iniciar el análisis -->
+  <div id="popup-overlay" class="popup-overlay">
+    <div class="popup-card" role="dialog" aria-modal="true" aria-labelledby="popup-title">
+      <div class="popup-header">
+        <span class="popup-tag">Análisis de repositorio</span>
+        <h2 id="popup-title" class="popup-title">Antes de empezar</h2>
+        <p class="popup-subtitle">
+          El análisis suele tardar entre 3 y 10 minutos, según el tamaño del repositorio.
+        </p>
+      </div>
+
+      <div class="popup-body">
+        <!-- Campo de email -->
+        <div class="field-group">
+          <label for="popup-email" id="email-label" class="field-label">
+            Email para recibir el resultado
+          </label>
+          <input
+            type="email"
+            id="popup-email"
+            class="field-input"
+            placeholder="tu@email.com"
+            autocomplete="email"
+          />
+          <span id="email-help" class="field-help">
+            Opcional: te avisamos cuando termine el análisis.
+          </span>
+        </div>
+
+        <!-- Toggle de privacidad -->
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Acepto la <a href="/legal" target="_blank" class="toggle-link">política de privacidad</a></span>
+            <span id="toggle-sub" class="toggle-sub">Tu email solo se usa para enviarte el resultado.</span>
+          </div>
+          <button
+            id="privacy-toggle"
+            class="toggle-btn"
+            role="switch"
+            aria-checked="false"
+            type="button"
+          >
+            <span class="toggle-thumb"></span>
+          </button>
+        </div>
+
+        <!-- Caja informativa dinámica -->
+        <div id="info-box" class="info-box info-amber">
+          <span class="info-icon">!</span>
+          <p class="info-text" id="info-text">
+            Si cierras esta pestaña, el análisis se interrumpirá.
+            Añade tu email para poder cerrarla con seguridad.
+          </p>
+        </div>
+
+        <div id="measure-box" class="measure-box measure-hidden" aria-live="polite">
+          <div class="measure-header">
+            <div>
+              <p id="measure-title" class="measure-title">Midiendo el repositorio...</p>
+              <p id="measure-message" class="measure-message">
+                Gracias por esperar. Estamos calculando el tamaño útil del repo para estimar el análisis más fiable.
+              </p>
+            </div>
+            <p id="measure-stats" class="measure-stats">
+              Repos pequeños: 1-3s · medianos: 3-8s · grandes: 8-15s
+            </p>
+          </div>
+          <div class="measure-track" aria-hidden="true">
+            <span class="measure-fill"></span>
+          </div>
+          <div class="measure-blocks" aria-hidden="true">
+            <span class="measure-block"></span>
+            <span class="measure-block"></span>
+            <span class="measure-block"></span>
+          </div>
+          <div id="measure-limit-panel" class="measure-limit-panel measure-limit-panel-hidden" aria-hidden="true">
+            <div class="measure-pill measure-pill-alert">
+              <span class="measure-pill-label">Archivos detectados</span>
+              <strong id="measure-detected-count" class="measure-pill-value">0</strong>
+            </div>
+            <div class="measure-pill">
+              <span class="measure-pill-label">Plan gratuito</span>
+              <strong id="measure-limit-count" class="measure-pill-value">750</strong>
+            </div>
+          </div>
+          <p id="measure-limit-note" class="measure-limit-note measure-limit-note-hidden"></p>
+        </div>
+      </div>
+
+      <div class="popup-footer">
+        <button id="popup-cancel" class="btn-secondary" type="button">Cancelar</button>
+        <button id="popup-start" class="btn-primary" type="button">
+          Iniciar análisis
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de URL del repo analizado -->
+  <div class="url-bar">
+    <input
+      type="text"
+      id="url-display"
+      class="url-input"
+      readonly
+      value="Cargando..."
+    />
+    <a href="/" class="btn-analyze">Analizar</a>
+  </div>
+
+  <!-- Banner de caché (oculto hasta que se muestre un resultado cacheado) -->
+  <div id="cache-banner" class="cache-banner cache-banner-hidden">
+    <span id="cache-banner-text"></span>
+    <button id="force-new-btn" class="btn-force-new" type="button">Análisis nuevo</button>
+  </div>
+
+  <div id="delivery-banner" class="delivery-banner delivery-banner-hidden">
+    <span id="delivery-banner-text"></span>
+  </div>
+
+  <!-- Banner de recomendación para móvil: visible solo en <640px -->
+  <!-- Se oculta tras el primer cierre y no vuelve a mostrarse en la sesión -->
+  <div id="mobile-banner" class="mobile-banner">
+    <span class="mobile-banner-text">Para mejor experiencia y legibilidad, usa IWTBI desde un ordenador.</span>
+    <button class="mobile-banner-close" id="mobile-banner-close" aria-label="Cerrar aviso">&times;</button>
+  </div>
+
+  <!-- Layout principal: sidebar + área de documento -->
+  <div class="analysis-layout">
+    <!-- Sidebar: Agentes -->
+    <aside>
+      <div class="sidebar-header">Agentes</div>
+      {
+        AGENTS.map((agent) => (
+          <div class="agent-row" id={`agent-${agent.id}`}>
+            <span class="agent-check" id={`check-${agent.id}`}>&nbsp;</span>
+            <div class="agent-info">
+              <span class="agent-label">
+                  {agent.label}
+                  <a href={agent.wiki} target="_blank" rel="noopener" class="wiki-link" title={`Wikipedia: ${agent.label}`}>i</a>
+                </span>
+              <span class="agent-sub">{agent.sublabel}</span>
+            </div>
+            <span class="agent-status" id={`status-${agent.id}`}>pendiente</span>
+          </div>
+        ))
+      }
+    </aside>
+
+    <!-- Área del documento -->
+    <main>
+      <!-- Encabezado del documento -->
+      <div class="doc-header">
+        <div class="doc-title-area">
+          <h2 id="doc-title">Análisis en curso...</h2>
+          <p id="doc-meta" class="doc-meta"></p>
+        </div>
+        <div class="doc-actions">
+          <button id="copy-btn" disabled class="btn-action">Copiar</button>
+          <button id="download-btn" disabled class="btn-action btn-action-primary">Descargar .md</button>
+        </div>
+      </div>
+
+      <!-- Cuerpo del documento -->
+      <div id="doc-body" class="doc-body">
+        <p class="doc-waiting">Cargando...</p>
+      </div>
+    </main>
+  </div>
+
+</Layout>
+
+<script>
+  import { marked, type Renderer } from "marked";
+  import DOMPurify from "dompurify";
+  import mermaid from "mermaid";
+  import {
+    getAnalysisTicket,
+    getBackendCapabilities,
+    measureRepositoryContext,
+    startAnalysis,
+  } from "../scripts/stream-client";
+  import type {
+    CachedAnalysisData,
+    RepoPreflightData,
+  } from "../scripts/stream-client";
+
+  const ANALYZE_BACKEND_URL =
+    (import.meta as unknown as { env: Record<string, string> }).env
+      ?.PUBLIC_BACKEND_URL ?? "http://localhost:8410";
+
+  // Determinar la URL del repo desde query param o path
+  const searchParams = new URLSearchParams(window.location.search);
+  const queryUrl = searchParams.get("url");
+  const repoUrl = queryUrl ?? null;
+  const forceNewRequested =
+    searchParams.get("force") === "true" || searchParams.get("force") === "1";
+
+  if (!repoUrl) {
+    window.location.href = "/";
+  }
+
+  // Mostrar la URL en la barra
+  const urlDisplay = document.getElementById("url-display") as HTMLInputElement;
+  urlDisplay.value = repoUrl?.replace("https://", "") ?? "";
+
+  const btnAnalyze = document.querySelector(".btn-analyze") as HTMLAnchorElement;
+  btnAnalyze.href = `/?url=${encodeURIComponent(repoUrl ?? "")}`;
+
+  // ── Popup lógica ─────────────────────────────────────────────────────────
+  const overlay      = document.getElementById("popup-overlay")!;
+  const emailInput   = document.getElementById("popup-email") as HTMLInputElement;
+  const emailLabel   = document.getElementById("email-label")!;
+  const emailHelp    = document.getElementById("email-help")!;
+  const toggleBtn    = document.getElementById("privacy-toggle") as HTMLButtonElement;
+  const toggleSub    = document.getElementById("toggle-sub")!;
+  const infoBox      = document.getElementById("info-box")!;
+  const infoText     = document.getElementById("info-text")!;
+  const measureBox   = document.getElementById("measure-box")!;
+  const measureTitle = document.getElementById("measure-title")!;
+  const measureMessage = document.getElementById("measure-message")!;
+  const measureStats = document.getElementById("measure-stats")!;
+  const measureLimitPanel = document.getElementById("measure-limit-panel")!;
+  const measureDetectedCount = document.getElementById("measure-detected-count")!;
+  const measureLimitCount = document.getElementById("measure-limit-count")!;
+  const measureLimitNote = document.getElementById("measure-limit-note")!;
+  const cancelBtn    = document.getElementById("popup-cancel")!;
+  const startBtn     = document.getElementById("popup-start")!;
+  const deliveryBanner = document.getElementById("delivery-banner")!;
+  const deliveryBannerText = document.getElementById("delivery-banner-text")!;
+
+  const renderer: Partial<Renderer> = {
+    code({ text, lang }) {
+      if (lang === "mermaid") {
+        const normalized = normalizeMermaidSource(text);
+        const escaped = normalized
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return `<div class="mermaid">${escaped}</div>`;
+      }
+
+      const escaped = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<pre><code class="language-${lang ?? ""}">${escaped}</code></pre>`;
+    },
+  };
+  marked.use({ renderer });
+
+  const purifyConfig: DOMPurify.Config = {
+    ADD_TAGS: [
+      "svg", "use", "path", "circle", "rect", "line",
+      "polyline", "polygon", "text", "tspan", "g", "defs",
+      "marker", "foreignObject",
+    ],
+    ADD_ATTR: [
+      "viewBox", "xmlns", "d", "fill", "stroke", "stroke-width",
+      "transform", "x", "y", "width", "height", "cx", "cy", "r",
+      "points", "marker-end", "class", "id", "style",
+    ],
+  };
+
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "default",
+    securityLevel: "loose",
+  });
+
+  let privacyAccepted = false;
+  let collectedEmail  = "";
+  let capabilitiesReady = false;
+  let emailNotificationsEnabled = false;
+  let analysisPendingOrRunning = false;
+  let canLeaveWithoutRisk = true;
+
+  function hideMeasureBox() {
+    measureBox.classList.add("measure-hidden");
+    measureBox.dataset.mode = "";
+    hideMeasureLimitPanel();
+  }
+
+  function hideMeasureLimitPanel() {
+    measureLimitPanel.classList.add("measure-limit-panel-hidden");
+    measureLimitPanel.setAttribute("aria-hidden", "true");
+    measureLimitNote.classList.add("measure-limit-note-hidden");
+    measureLimitNote.textContent = "";
+  }
+
+  function showMeasureLimitPanel(preflight: RepoPreflightData) {
+    measureDetectedCount.textContent = String(preflight.candidate_files);
+    measureLimitCount.textContent = String(preflight.candidate_file_limit);
+    measureLimitNote.textContent =
+      `En la versión gratuita analizamos hasta ${preflight.candidate_file_limit} archivos útiles por repositorio para mantener la calidad y el coste de contexto bajo control.`;
+    measureLimitPanel.classList.remove("measure-limit-panel-hidden");
+    measureLimitPanel.setAttribute("aria-hidden", "false");
+    measureLimitNote.classList.remove("measure-limit-note-hidden");
+  }
+
+  function showMeasuringState() {
+    measureBox.className = "measure-box measure-measuring";
+    measureBox.dataset.mode = "measuring";
+    hideMeasureLimitPanel();
+    measureTitle.textContent = "Midiendo el repositorio...";
+    measureMessage.textContent =
+      "Gracias por esperar. Estamos calculando el tamaño útil del repo para estimar el análisis más fiable.";
+    measureStats.textContent =
+      "Repos pequeños: 1-3s · medianos: 3-8s · grandes: 8-15s";
+  }
+
+  function formatCompactNumber(value: number) {
+    return new Intl.NumberFormat("es-ES", { notation: "compact" }).format(value);
+  }
+
+  function getMeasureStats(preflight: RepoPreflightData) {
+    if (preflight.reason === "file_count_limit") {
+      return `${preflight.candidate_files} archivos analizables detectados · límite gratuito: ${preflight.candidate_file_limit}`;
+    }
+
+    return `${preflight.selected_files}/${preflight.candidate_files} archivos clave · ${formatCompactNumber(preflight.selected_chars)} chars útiles`;
+  }
+
+  function getTooLargeMessage(preflight: RepoPreflightData) {
+    if (preflight.reason === "file_count_limit") {
+      return `Hemos detectado ${preflight.candidate_files} archivos analizables. En esta versión gratuita analizamos hasta ${preflight.candidate_file_limit} archivos útiles por repositorio para mantener el coste de contexto bajo control.`;
+    }
+
+    return "Este repositorio supera el tamaño recomendado para un análisis fiable en una sola pasada. Te recomendamos probar con un repo más pequeño o dividir el análisis.";
+  }
+
+  function getTooLargeTitle(preflight: RepoPreflightData) {
+    return preflight.reason === "file_count_limit"
+      ? "Límite gratuito superado."
+      : "Repositorio demasiado grande para una sola pasada.";
+  }
+
+  function showMeasuredState(preflight: RepoPreflightData) {
+    measureBox.className = `measure-box measure-${preflight.mode}`;
+    measureBox.dataset.mode = preflight.mode;
+    measureStats.textContent = getMeasureStats(preflight);
+    hideMeasureLimitPanel();
+
+    if (preflight.mode === "normal") {
+      measureTitle.textContent = "Repositorio apto para análisis completo.";
+      measureMessage.textContent =
+        "El contexto útil entra dentro del presupuesto previsto. Arrancamos el análisis completo.";
+      return;
+    }
+
+    if (preflight.mode === "optimized") {
+      measureTitle.textContent = "Repositorio amplio detectado.";
+      measureMessage.textContent =
+        "Priorizaremos archivos clave para mantener un análisis fiable. Analizaremos primero arquitectura, API, lógica, despliegue y archivos principales del proyecto.";
+      return;
+    }
+
+    if (preflight.reason === "file_count_limit") {
+      showMeasureLimitPanel(preflight);
+    }
+    measureTitle.textContent = getTooLargeTitle(preflight);
+    measureMessage.textContent = getTooLargeMessage(preflight);
+  }
+
+  function buildStateMetric(label: string, value: string, accent = false) {
+    const item = document.createElement("div");
+    item.className = accent ? "doc-state-metric doc-state-metric-accent" : "doc-state-metric";
+
+    const metricLabel = document.createElement("span");
+    metricLabel.className = "doc-state-metric-label";
+    metricLabel.textContent = label;
+
+    const metricValue = document.createElement("strong");
+    metricValue.className = "doc-state-metric-value";
+    metricValue.textContent = value;
+
+    item.append(metricLabel, metricValue);
+    return item;
+  }
+
+  function showPreflightBlocked(preflight: RepoPreflightData) {
+    setLeaveProtection(false, true);
+    hideDeliveryBanner();
+
+    while (docBody.firstChild) {
+      docBody.removeChild(docBody.firstChild);
+    }
+
+    const card = document.createElement("section");
+    card.className =
+      preflight.reason === "file_count_limit"
+        ? "doc-state-card doc-state-card-blocked"
+        : "doc-state-card";
+
+    const tag = document.createElement("span");
+    tag.className = "doc-state-tag";
+    tag.textContent =
+      preflight.reason === "file_count_limit" ? "Versión gratuita" : "Tamaño del repo";
+
+    const title = document.createElement("h3");
+    title.className = "doc-state-title";
+    title.textContent =
+      preflight.reason === "file_count_limit"
+        ? "Este repositorio supera el límite gratuito"
+        : "Este repositorio necesita un alcance más pequeño";
+
+    const body = document.createElement("p");
+    body.className = "doc-state-body";
+    body.textContent = getTooLargeMessage(preflight);
+
+    const metrics = document.createElement("div");
+    metrics.className = "doc-state-metrics";
+
+    if (preflight.reason === "file_count_limit") {
+      const ratio = (preflight.candidate_files / preflight.candidate_file_limit).toFixed(1);
+      metrics.append(
+        buildStateMetric("Archivos detectados", String(preflight.candidate_files), true),
+        buildStateMetric("Plan gratuito", `${preflight.candidate_file_limit} max`),
+        buildStateMetric("Relación", `${ratio}x del plan`)
+      );
+    } else {
+      metrics.append(
+        buildStateMetric("Archivos clave", `${preflight.selected_files}/${preflight.candidate_files}`),
+        buildStateMetric("Chars útiles", formatCompactNumber(preflight.selected_chars)),
+        buildStateMetric("Modo", "Una sola pasada")
+      );
+    }
+
+    const note = document.createElement("p");
+    note.className = "doc-state-note";
+    note.textContent =
+      preflight.reason === "file_count_limit"
+        ? "No iniciamos el análisis para evitar degradar la calidad y disparar el coste de contexto en la versión gratuita."
+        : "Prueba con un repositorio más pequeño o con una versión más acotada del proyecto para obtener un resultado más fiable.";
+
+    const actions = document.createElement("div");
+    actions.className = "doc-state-actions";
+
+    const retryLink = document.createElement("a");
+    retryLink.className = "doc-state-link";
+    retryLink.href = "/";
+    retryLink.textContent = "Probar otro repositorio";
+    actions.appendChild(retryLink);
+
+    card.append(tag, title, body, metrics, note, actions);
+    docBody.appendChild(card);
+  }
+
+  function normalizeMermaidSource(src: string): string {
+    return src
+      .replace(/\binteger\b/g, "int")
+      .replace(/\btimestamp\b/g, "datetime")
+      .replace(/\bbytea\b/g, "blob")
+      .replace(/\bjsonb?\b/g, "string")
+      .replace(/\btext\b/g, "string")
+      .replace(/\bboolean\b/g, "bool")
+      .replace(/\bbigint\b/g, "int")
+      .replace(/\bnumeric\b/g, "float")
+      .replace(/\[([^\]]*?)@([^\]]*?)\]/g, (_m, pre, post) => `[${(pre + post).trim() || "?"}]`)
+      .replace(/\[([^\]]*?)\/([^\]]*?)\]/g, (_m, pre, post) => `[${pre}-${post}]`)
+      .replace(/:\s*"([^"]*?)\/([^"]*?)"/g, (_m, pre, post) => `: "${pre}-${post}"`)
+      .replace(/:\s*"([^"]+)"/g, (_m, label) => `: "${label.replace(/\s+/g, "-")}"`)
+      .replace(/\b(PK|FK|UK)\s+(PK|FK|UK)\b/g, (_m, _first, second) => second);
+  }
+
+  async function renderMermaidDiagrams(root: HTMLElement) {
+    const mermaidNodes = root.querySelectorAll<HTMLElement>(".mermaid");
+    for (const node of mermaidNodes) {
+      const source = node.textContent ?? "";
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch {
+        // Mermaid puede fallar en runtime; en ese caso mostramos el código.
+      }
+
+      const hasSyntaxError = Array.from(node.querySelectorAll("text")).some(
+        (textNode) => textNode.textContent?.includes("Syntax error"),
+      );
+      if (!hasSyntaxError) {
+        continue;
+      }
+
+      const pre = document.createElement("pre");
+      pre.className = "mermaid-error";
+      const code = document.createElement("code");
+      code.textContent = source;
+      pre.appendChild(code);
+      node.replaceWith(pre);
+    }
+  }
+
+  async function renderMarkdownInto(
+    target: HTMLElement,
+    markdown: string,
+    wrapperClass = "prose",
+  ) {
+    const wrapper = document.createElement("div");
+    wrapper.className = wrapperClass;
+
+    try {
+      const rawHtml = await marked.parse(markdown);
+      wrapper.innerHTML = DOMPurify.sanitize(rawHtml, purifyConfig);
+      await renderMermaidDiagrams(wrapper);
+    } catch {
+      const pre = document.createElement("pre");
+      pre.className = "doc-markdown-fallback";
+      pre.textContent = markdown;
+      wrapper.replaceChildren(pre);
+    }
+
+    target.replaceChildren(wrapper);
+  }
+
+  function syncEmailControls() {
+    if (emailNotificationsEnabled) {
+      emailLabel.textContent = "Email para recibir el resultado";
+      emailHelp.textContent = "Opcional: te avisamos cuando termine el análisis.";
+      emailInput.disabled = false;
+      emailInput.placeholder = "tu@email.com";
+      toggleBtn.disabled = false;
+      toggleBtn.classList.remove("toggle-disabled");
+      toggleSub.textContent = "Tu email solo se usa para enviarte el resultado.";
+    } else {
+      privacyAccepted = false;
+      emailInput.value = "";
+      emailInput.disabled = true;
+      emailInput.placeholder = "Aviso por email no disponible";
+      emailLabel.textContent = "Aviso por email";
+      emailHelp.textContent =
+        "Estamos terminando la configuración del envío por email.";
+      toggleBtn.disabled = true;
+      toggleBtn.setAttribute("aria-checked", "false");
+      toggleBtn.classList.remove("toggle-on");
+      toggleBtn.classList.add("toggle-disabled");
+      toggleSub.textContent =
+        "El aviso por email está desactivado temporalmente.";
+    }
+
+    updateInfoBox();
+  }
+
+  // Actualizar la caja informativa en función del email introducido
+  function updateInfoBox() {
+    if (!capabilitiesReady) {
+      infoBox.className = "info-box info-amber";
+      infoText.textContent =
+        "Comprobando si el aviso por email está disponible. El análisis suele tardar entre 3 y 10 minutos.";
+      return;
+    }
+
+    const hasEmail =
+      emailNotificationsEnabled &&
+      emailInput.value.trim().length > 0 &&
+      privacyAccepted;
+
+    if (hasEmail) {
+      infoBox.className = "info-box info-green";
+      infoText.textContent =
+        "Cuando el análisis haya arrancado podrás cerrar esta pestaña. Suele tardar entre 3 y 10 minutos y te avisaremos por email cuando termine.";
+    } else if (!emailNotificationsEnabled) {
+      infoBox.className = "info-box info-amber";
+      infoText.textContent =
+        "Ahora mismo el aviso por email no está disponible. Mantén esta pestaña abierta: el análisis suele tardar entre 3 y 10 minutos.";
+    } else {
+      infoBox.className = "info-box info-amber";
+      infoText.textContent =
+        "Si cierras esta pestaña, el análisis se interrumpirá. Suele tardar entre 3 y 10 minutos. Añade tu email para poder cerrarla con seguridad.";
+    }
+  }
+
+  emailInput.addEventListener("input", updateInfoBox);
+
+  toggleBtn.addEventListener("click", () => {
+    if (!emailNotificationsEnabled) {
+      return;
+    }
+    privacyAccepted = !privacyAccepted;
+    toggleBtn.setAttribute("aria-checked", String(privacyAccepted));
+    toggleBtn.classList.toggle("toggle-on", privacyAccepted);
+    updateInfoBox();
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    window.location.href = "/";
+  });
+
+  function setLeaveProtection(active: boolean, safeToLeave: boolean) {
+    analysisPendingOrRunning = active;
+    canLeaveWithoutRisk = safeToLeave;
+  }
+
+  function hideDeliveryBanner() {
+    deliveryBanner.className = "delivery-banner delivery-banner-hidden";
+    deliveryBannerText.textContent = "";
+  }
+
+  function showDeliveryBanner(message: string, tone: "success" | "warning") {
+    deliveryBanner.className = `delivery-banner delivery-banner-${tone}`;
+    deliveryBannerText.textContent = message;
+  }
+
+  window.addEventListener("beforeunload", (event) => {
+    if (!analysisPendingOrRunning || canLeaveWithoutRisk) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
+  startBtn.addEventListener("click", async () => {
+    if (!capabilitiesReady) {
+      return;
+    }
+
+    const email = emailInput.value.trim();
+    // Validar: si hay email, debe haber aceptado privacidad
+    if (emailNotificationsEnabled && email && !privacyAccepted) {
+      emailInput.focus();
+      toggleBtn.classList.add("toggle-shake");
+      setTimeout(() => toggleBtn.classList.remove("toggle-shake"), 600);
+      return;
+    }
+
+    startBtn.setAttribute("disabled", "true");
+    startBtn.textContent = "Midiendo...";
+    showMeasuringState();
+    infoBox.className = "info-box info-amber";
+    infoText.textContent =
+      "Midiendo el repositorio antes de iniciar el análisis. Gracias por esperar.";
+
+    collectedEmail =
+      emailNotificationsEnabled && privacyAccepted ? email : "";
+    const result = await runAnalysis(collectedEmail || undefined, forceNewRequested);
+    if (!result.accepted) {
+      setLeaveProtection(false, true);
+      startBtn.removeAttribute("disabled");
+      startBtn.textContent = "Iniciar análisis";
+      if (measureBox.dataset.mode !== "too_large") {
+        updateInfoBox();
+      }
+      return;
+    }
+
+    startBtn.removeAttribute("disabled");
+    startBtn.textContent = "Iniciar análisis";
+    overlay.classList.add("popup-hidden");
+  });
+
+  // ── Helpers de estado de agentes ─────────────────────────────────────────
+  type AgentStatus = "pendiente" | "en curso..." | "completado";
+
+  function setAgentStatus(agentId: string, status: AgentStatus) {
+    const checkEl  = document.getElementById(`check-${agentId}`)!;
+    const statusEl = document.getElementById(`status-${agentId}`)!;
+    const rowEl    = document.getElementById(`agent-${agentId}`)!;
+
+    statusEl.textContent = status;
+    statusEl.className = "agent-status status-" + status.replace(/\.\.\.$/, "").trim().replace(/ /g, "-");
+
+    if (status === "completado") {
+      checkEl.textContent = "✓";
+      checkEl.className = "agent-check check-done";
+      rowEl.classList.add("row-done");
+    } else if (status === "en curso...") {
+      checkEl.textContent = "·";
+      checkEl.className = "agent-check check-running";
+    }
+  }
+
+  function resetAgentStatuses() {
+    const agents = [
+      "sherlock",
+      "frank",
+      "oracle",
+      "hermes",
+      "picasso",
+      "turing",
+      "macgyver",
+      "synthesizer",
+    ] as const;
+    agents.forEach((id) => setAgentStatus(id, "pendiente"));
+  }
+
+  let fullDocument = "";
+  const docBody  = document.getElementById("doc-body")!;
+  const docTitle = document.getElementById("doc-title")!;
+  const docMeta  = document.getElementById("doc-meta")!;
+  docMeta.textContent = "Tiempo estimado: entre 3 y 10 minutos, según el tamaño del repositorio.";
+
+  function describePlannedMode(preflight: RepoPreflightData) {
+    if (preflight.mode === "optimized") {
+      return "Modo previsto: priorización de archivos clave.";
+    }
+    return "Modo previsto: análisis completo.";
+  }
+
+  function showDocumentWaiting(message: string) {
+    while (docBody.firstChild) {
+      docBody.removeChild(docBody.firstChild);
+    }
+
+    const waitingP = document.createElement("p");
+    waitingP.className = "doc-waiting";
+    waitingP.textContent = message;
+    docBody.appendChild(waitingP);
+  }
+
+  function hasRenderableDocument(doc: string | null | undefined): doc is string {
+    return typeof doc === "string" && doc.trim().length > 0;
+  }
+
+  async function fetchSavedAnalysisDocument(repoFullName: string): Promise<string | null> {
+    const [owner, repo] = repoFullName.split("/", 2);
+    if (!owner || !repo) {
+      return null;
+    }
+
+    const fetchUrl =
+      `${ANALYZE_BACKEND_URL}/api/biblioteca/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    const retryDelays = [0, 300, 800];
+
+    for (const delay of retryDelays) {
+      if (delay > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, delay));
+      }
+
+      try {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) {
+          continue;
+        }
+
+        const entry = (await response.json()) as { document?: string };
+        if (hasRenderableDocument(entry.document)) {
+          return entry.document;
+        }
+      } catch {
+        // Si la lectura del análisis guardado falla, seguimos con el
+        // siguiente intento y luego caeremos al documento del SSE.
+      }
+    }
+
+    return null;
+  }
+
+  async function resolveFinalDocument(
+    repoFullName: string,
+    streamedDocument: string,
+  ): Promise<string | null> {
+    const savedDocument = await fetchSavedAnalysisDocument(repoFullName);
+    if (hasRenderableDocument(savedDocument)) {
+      return savedDocument;
+    }
+
+    if (hasRenderableDocument(streamedDocument)) {
+      return streamedDocument;
+    }
+
+    return null;
+  }
+
+  async function runPreflightCheck(): Promise<RepoPreflightData | null> {
+    if (!repoUrl) {
+      return null;
+    }
+
+    hideDeliveryBanner();
+    showMeasuringState();
+    showDocumentWaiting("Midiendo el repositorio...");
+
+    try {
+      const preflight = await measureRepositoryContext(repoUrl);
+      showMeasuredState(preflight);
+
+      if (preflight.mode === "too_large") {
+        docTitle.textContent = getTooLargeTitle(preflight).replace(/\.$/, "");
+        docMeta.textContent =
+          preflight.reason === "file_count_limit"
+            ? `versión gratuita · límite ${preflight.candidate_file_limit} archivos`
+            : "medición completada";
+        infoBox.className = "info-box info-red";
+        infoText.textContent =
+          preflight.reason === "file_count_limit"
+            ? `Este repositorio supera el límite gratuito actual de ${preflight.candidate_file_limit} archivos.`
+            : getTooLargeMessage(preflight);
+        showPreflightBlocked(preflight);
+        return null;
+      }
+
+      docMeta.textContent = describePlannedMode(preflight);
+      infoBox.className =
+        preflight.mode === "optimized" ? "info-box info-amber" : "info-box info-green";
+      infoText.textContent =
+        preflight.mode === "optimized"
+          ? "Repositorio amplio detectado. Priorizaremos archivos clave para mantener un análisis fiable."
+          : "Repositorio apto para análisis completo. Arrancamos el análisis.";
+
+      return preflight;
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "No se pudo medir el repositorio.";
+      infoBox.className = "info-box info-amber";
+      infoText.textContent = message;
+      showError(message);
+      return null;
+    }
+  }
+
+  async function appendSection(agentId: string, section: string) {
+    const waiting = docBody.querySelector(".doc-waiting");
+    if (waiting) waiting.remove();
+
+    const block = document.createElement("section");
+    block.className = "doc-section";
+    block.dataset.agent = agentId;
+    docBody.appendChild(block);
+    await renderMarkdownInto(block, section, "prose");
+    block.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  async function showFinalDocument(doc: string) {
+    await renderMarkdownInto(docBody, doc, "prose doc-final");
+  }
+
+  async function finalizeCompletedAnalysis(
+    repoFullName: string,
+    streamedDocument: string,
+    startTime: number,
+  ) {
+    setLeaveProtection(false, true);
+    hideDeliveryBanner();
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    docMeta.textContent = `análisis: ${elapsed}s · preparando documento final`;
+
+    const finalDocument = await resolveFinalDocument(repoFullName, streamedDocument);
+    if (!hasRenderableDocument(finalDocument)) {
+      showError(
+        "El análisis terminó, pero no pudimos recuperar el documento final. Prueba a abrirlo desde la biblioteca dentro de unos segundos.",
+      );
+      return;
+    }
+
+    fullDocument = finalDocument;
+    docMeta.textContent = `análisis: ${elapsed}s`;
+    await showFinalDocument(finalDocument);
+    setupCopyDownload(repoFullName);
+  }
+
+  function showError(msg: string) {
+    setLeaveProtection(false, true);
+    hideDeliveryBanner();
+    docTitle.textContent = "Error en el análisis";
+    while (docBody.firstChild) docBody.removeChild(docBody.firstChild);
+    const p = document.createElement("p");
+    p.className = "doc-error";
+    p.textContent = msg;
+    docBody.appendChild(p);
+  }
+
+  // ── Banner de caché ───────────────────────────────────────────────────────
+  function showCacheBanner(hasChanges: boolean, repoFullName: string) {
+    const banner     = document.getElementById("cache-banner")!;
+    const bannerText = document.getElementById("cache-banner-text")!;
+    const forceBtn   = document.getElementById("force-new-btn")!;
+
+    banner.classList.remove("cache-banner-hidden");
+
+    if (hasChanges) {
+      banner.classList.add("cache-banner-amber");
+      bannerText.textContent =
+        `El repositorio ${repoFullName} ha cambiado desde el último análisis.`;
+      forceBtn.style.display = "inline-block";
+    } else {
+      banner.classList.add("cache-banner-neutral");
+      bannerText.textContent = `Resultado cacheado para ${repoFullName}.`;
+      forceBtn.style.display = "none";
+    }
+
+    forceBtn.addEventListener("click", () => {
+      banner.classList.add("cache-banner-hidden");
+      if (repoUrl) {
+        void runAnalysis(undefined, true);
+      }
+    });
+  }
+
+  // ── Lógica principal de análisis ──────────────────────────────────────────
+  function setupCopyDownload(repoShort: string) {
+    const copyBtn = document.getElementById("copy-btn") as HTMLButtonElement;
+    const dlBtn   = document.getElementById("download-btn") as HTMLButtonElement;
+    copyBtn.disabled = false;
+    dlBtn.disabled   = false;
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(fullDocument).then(() => {
+        copyBtn.textContent = "Copiado";
+        setTimeout(() => { copyBtn.textContent = "Copiar"; }, 2000);
+      });
+    });
+
+    dlBtn.addEventListener("click", () => {
+      const blob = new Blob([fullDocument], { type: "text/markdown" });
+      const a    = document.createElement("a");
+      a.href     = URL.createObjectURL(blob);
+      a.download = `${repoShort.replace("/", "-")}.md`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
+  async function runAnalysis(email?: string, forceNew = false) {
+    if (!repoUrl) {
+      return { accepted: false, cached: false };
+    }
+
+    resetAgentStatuses();
+    const preflight = await runPreflightCheck();
+    if (!preflight) {
+      return { accepted: false, cached: false };
+    }
+
+    const repoShort = repoUrl.replace("https://github.com/", "");
+    docTitle.textContent = `${repoShort} — Documentación de construcción`;
+    const ticket = await getAnalysisTicket().catch(() => null);
+    if (!ticket) {
+      setLeaveProtection(false, true);
+      showError("No se pudo preparar el análisis. Recarga la página y vuelve a intentarlo.");
+      return { accepted: false, cached: false };
+    }
+
+    setLeaveProtection(true, false);
+    hideDeliveryBanner();
+
+    const startTime = Date.now();
+
+    // Mostrar "iniciando..." mientras espera respuesta del backend
+    showDocumentWaiting("Iniciando análisis...");
+
+    try {
+      const result = await startAnalysis(
+        repoUrl,
+        {
+          onStatus(status) {
+            if (status === "analyzing") {
+              const agents = ["sherlock", "frank", "oracle", "hermes", "picasso", "turing", "macgyver", "synthesizer"];
+              agents.forEach((id) => setAgentStatus(id as Parameters<typeof setAgentStatus>[0], "en curso..."));
+            }
+          },
+
+          onAgent({ agent, section }) {
+            setAgentStatus(agent, "completado");
+            void appendSection(agent, section);
+          },
+
+          onComplete(doc) {
+            void finalizeCompletedAnalysis(repoShort, doc, startTime);
+          },
+
+          onError: showError,
+
+          onCached(data: CachedAnalysisData) {
+            fullDocument = data.document;
+            setLeaveProtection(false, true);
+            hideDeliveryBanner();
+            docMeta.textContent = `cacheado el ${new Date(data.updated_at).toLocaleDateString("es-ES")}`;
+            void showFinalDocument(data.document).then(() => {
+              setupCopyDownload(data.repo_full_name);
+            });
+            showCacheBanner(data.has_changes, data.repo_full_name);
+
+            // Marcar todos los agentes como completados en el sidebar
+            const agents = ["sherlock", "frank", "oracle", "hermes", "picasso", "turing", "macgyver", "synthesizer"];
+            agents.forEach((id) => setAgentStatus(id, "completado"));
+          },
+        },
+        { forceNew, email, ticket },
+      );
+      if (!result.accepted) {
+        setLeaveProtection(false, true);
+        return result;
+      }
+
+      if (result.cached) {
+        setLeaveProtection(false, true);
+        return result;
+      }
+
+      if (email) {
+        setLeaveProtection(true, true);
+        showDeliveryBanner(
+          `${describePlannedMode(preflight)} Suele tardar entre 3 y 10 minutos. Puedes cerrar esta pestaña; te enviaremos el resultado a ${email}.`,
+          "success",
+        );
+      } else {
+        setLeaveProtection(true, false);
+        showDeliveryBanner(
+          `${describePlannedMode(preflight)} Suele tardar entre 3 y 10 minutos. Mantén esta pestaña abierta o el análisis se cancelará.`,
+          "warning",
+        );
+      }
+
+      return result;
+    } catch {
+      setLeaveProtection(false, true);
+      showError("Error inesperado al conectar con el servidor de análisis");
+      return { accepted: false, cached: false };
+    }
+  }
+
+  // El popup se muestra al cargar la página si hay una URL válida
+  if (repoUrl) {
+    overlay.classList.remove("popup-hidden");
+  }
+
+  startBtn.setAttribute("disabled", "true");
+  startBtn.textContent = "Cargando...";
+  emailInput.disabled = true;
+  toggleBtn.disabled = true;
+  toggleBtn.classList.add("toggle-disabled");
+  updateInfoBox();
+
+  void getBackendCapabilities()
+    .then((capabilities) => {
+      capabilitiesReady = true;
+      emailNotificationsEnabled = capabilities.emailNotificationsEnabled;
+      syncEmailControls();
+      startBtn.removeAttribute("disabled");
+      startBtn.textContent = "Iniciar análisis";
+    })
+    .catch(() => {
+      capabilitiesReady = true;
+      emailNotificationsEnabled = false;
+      syncEmailControls();
+      startBtn.removeAttribute("disabled");
+      startBtn.textContent = "Iniciar análisis";
+    });
+
+  // Banner de recomendación móvil — se muestra una vez por sesión
+  const mobileBanner = document.getElementById("mobile-banner") as HTMLDivElement;
+  const mobileBannerClose = document.getElementById("mobile-banner-close") as HTMLButtonElement;
+
+  const BANNER_SESSION_KEY = "iwtbi_mobile_banner_dismissed";
+
+  if (window.innerWidth <= 640 && !sessionStorage.getItem(BANNER_SESSION_KEY)) {
+    mobileBanner.style.display = "flex";
+  }
+
+  mobileBannerClose?.addEventListener("click", () => {
+    mobileBanner.style.display = "none";
+    sessionStorage.setItem(BANNER_SESSION_KEY, "1");
+  });
+</script>
+
+<style is:global>
+  /* ── Popup overlay ── */
+  .popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .popup-overlay.popup-hidden { display: none; }
+
+  .popup-card {
+    background: var(--white);
+    border: 2px solid var(--black);
+    box-shadow: 6px 6px 0 var(--coral);
+    width: 100%;
+    max-width: 480px;
+    max-height: min(92svh, 760px);
+    padding: 0;
+    margin: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .popup-header {
+    padding: 28px 28px 20px;
+    border-bottom: 1px solid var(--light);
+  }
+  .popup-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .popup-title {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    color: var(--black);
+    margin: 0 0 8px;
+  }
+  .popup-subtitle {
+    font-size: 0.875rem;
+    color: #555;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .popup-body {
+    padding: 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  /* Campo de email */
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: 0.8rem; font-weight: 600; color: var(--dark); }
+  .field-help {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .field-input {
+    height: 40px;
+    border: 2px solid var(--black);
+    padding: 0 12px;
+    font-size: 0.875rem;
+    font-family: var(--font-body);
+    outline: none;
+    background: var(--white);
+    color: var(--dark);
+  }
+  .field-input:focus { border-color: var(--coral); }
+  .field-input:disabled {
+    background: #f3f3f3;
+    color: #777;
+    cursor: not-allowed;
+  }
+
+  /* Toggle de privacidad */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .toggle-info { flex: 1; min-width: 0; }
+  .toggle-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--dark);
+  }
+  .toggle-link {
+    text-decoration: underline;
+    font-weight: 700;
+    color: inherit;
+  }
+  .toggle-link:hover { color: var(--black); }
+  .toggle-sub {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .toggle-btn {
+    width: 44px;
+    height: 24px;
+    border: 2px solid var(--black);
+    background: #d0d0d0;
+    border-radius: 0;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    padding: 0;
+  }
+  .toggle-btn.toggle-on { background: var(--coral); }
+  .toggle-btn.toggle-disabled {
+    background: #e2e2e2;
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--black);
+    transition: transform 0.15s;
+  }
+  .toggle-btn.toggle-on .toggle-thumb { transform: translateX(20px); }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25%       { transform: translateX(-4px); }
+    75%       { transform: translateX(4px); }
+  }
+  .toggle-shake { animation: shake 0.3s ease; }
+
+  /* Caja informativa */
+  .info-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 2px solid;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    border-radius: 0;
+  }
+  .info-green {
+    background: #eafaf0;
+    border-color: #1a7f37;
+    color: #145c28;
+  }
+  .info-amber {
+    background: #fff8e6;
+    border-color: #d97706;
+    color: #7c4d00;
+  }
+  .info-red {
+    background: #fff1f1;
+    border-color: #c53030;
+    color: #8f1d1d;
+  }
+  .info-icon {
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .info-text { margin: 0; }
+
+  .measure-box {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 2px solid var(--black);
+    background: #fffaf7;
+  }
+  .measure-hidden { display: none; }
+  .measure-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .measure-title {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .measure-message {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #555;
+    line-height: 1.5;
+  }
+  .measure-stats {
+    margin: 0;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+  .measure-track {
+    position: relative;
+    overflow: hidden;
+    height: 10px;
+    border: 2px solid var(--black);
+    background: #ffe6d8;
+  }
+  .measure-fill {
+    display: block;
+    width: 38%;
+    height: 100%;
+    background: var(--coral);
+    animation: measure-slide 1.25s ease-in-out infinite;
+  }
+  .measure-blocks {
+    display: flex;
+    gap: 8px;
+  }
+  .measure-block {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--black);
+    background: var(--white);
+    animation: measure-pulse 1.2s steps(1, end) infinite;
+  }
+  .measure-block:nth-child(2) { animation-delay: 0.2s; }
+  .measure-block:nth-child(3) { animation-delay: 0.4s; }
+  .measure-limit-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .measure-limit-panel-hidden { display: none; }
+  .measure-pill {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 2px solid var(--black);
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .measure-pill-alert::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(197, 48, 48, 0.08) 0 12px,
+      rgba(255, 181, 167, 0.18) 12px 24px
+    );
+    animation: measure-alert-stripes 1.4s linear infinite;
+    pointer-events: none;
+  }
+  .measure-pill-label {
+    position: relative;
+    z-index: 1;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .measure-pill-value {
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--black);
+  }
+  .measure-limit-note {
+    margin: 0;
+    font-size: 0.74rem;
+    line-height: 1.55;
+    color: #8f1d1d;
+  }
+  .measure-limit-note-hidden { display: none; }
+  .measure-normal {
+    background: #f2fcf5;
+    border-color: #1a7f37;
+  }
+  .measure-optimized {
+    background: #fff8e6;
+    border-color: #d97706;
+  }
+  .measure-too_large {
+    background: #fff1f1;
+    border-color: #c53030;
+  }
+  .measure-normal .measure-track { background: #dcfce7; }
+  .measure-optimized .measure-track { background: #fde68a; }
+  .measure-too_large .measure-track { background: #fecaca; }
+  .measure-normal .measure-fill,
+  .measure-optimized .measure-fill,
+  .measure-too_large .measure-fill {
+    animation-play-state: paused;
+    width: 100%;
+  }
+  .measure-normal .measure-block,
+  .measure-optimized .measure-block,
+  .measure-too_large .measure-block {
+    animation-play-state: paused;
+    background: var(--coral);
+  }
+  .measure-too_large .measure-fill {
+    animation: measure-limit-pulse 1.25s ease-in-out infinite;
+    animation-play-state: running;
+  }
+  .measure-too_large .measure-block {
+    animation: measure-limit-block 1s ease-in-out infinite;
+    animation-play-state: running;
+    background: #fff;
+  }
+  .measure-too_large .measure-block:nth-child(2) { animation-delay: 0.15s; }
+  .measure-too_large .measure-block:nth-child(3) { animation-delay: 0.3s; }
+  .measure-normal .measure-message,
+  .measure-normal .measure-stats { color: #145c28; }
+  .measure-optimized .measure-message,
+  .measure-optimized .measure-stats { color: #7c4d00; }
+  .measure-too_large .measure-message,
+  .measure-too_large .measure-stats,
+  .measure-too_large .measure-title { color: #8f1d1d; }
+
+  @keyframes measure-slide {
+    0% { transform: translateX(-90%); }
+    50% { transform: translateX(80%); }
+    100% { transform: translateX(220%); }
+  }
+  @keyframes measure-pulse {
+    0%, 100% { background: var(--white); }
+    50% { background: var(--coral); }
+  }
+  @keyframes measure-alert-stripes {
+    0% { transform: translateX(-18px); }
+    100% { transform: translateX(18px); }
+  }
+  @keyframes measure-limit-pulse {
+    0%, 100% {
+      width: 100%;
+      opacity: 0.82;
+      background: linear-gradient(90deg, var(--coral), #f87171);
+    }
+    50% {
+      width: 100%;
+      opacity: 1;
+      background: linear-gradient(90deg, #ff9b8b, #dc2626);
+    }
+  }
+  @keyframes measure-limit-block {
+    0%, 100% {
+      transform: translateY(0);
+      background: #fff;
+    }
+    50% {
+      transform: translateY(-2px);
+      background: #f87171;
+    }
+  }
+
+  .doc-state-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px 24px;
+    border: var(--border);
+    background: #fffaf7;
+    box-shadow: var(--shadow-dark);
+    max-width: 760px;
+  }
+  .doc-state-card-blocked {
+    background:
+      linear-gradient(180deg, rgba(255, 181, 167, 0.18), rgba(255, 181, 167, 0)),
+      #fff7f5;
+  }
+  .doc-state-tag {
+    align-self: flex-start;
+    padding: 4px 10px;
+    border: var(--border);
+    background: var(--coral);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .doc-state-title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    line-height: 1.15;
+    color: var(--black);
+  }
+  .doc-state-body {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--dark);
+  }
+  .doc-state-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .doc-state-metric {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: var(--border);
+    background: var(--white);
+    min-height: 88px;
+  }
+  .doc-state-metric-accent::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255, 181, 167, 0.28) 0 14px,
+      rgba(248, 113, 113, 0.18) 14px 28px
+    );
+    animation: measure-alert-stripes 1.6s linear infinite;
+    pointer-events: none;
+  }
+  .doc-state-metric-label {
+    position: relative;
+    z-index: 1;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+  }
+  .doc-state-metric-value {
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    line-height: 1.05;
+    color: var(--black);
+  }
+  .doc-state-note {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: #8f1d1d;
+  }
+  .doc-state-actions {
+    display: flex;
+    justify-content: flex-start;
+  }
+  .doc-state-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 18px;
+    border: var(--border);
+    background: var(--black);
+    color: var(--white);
+    font-size: 0.84rem;
+    font-weight: 700;
+    box-shadow: 3px 3px 0 var(--coral);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .doc-state-link:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--coral);
+  }
+
+  /* Footer del popup */
+  .popup-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 28px 24px;
+    border-top: 1px solid var(--light);
+    background: var(--white);
+    flex-shrink: 0;
+  }
+  .btn-secondary {
+    padding: 10px 20px;
+    border: 2px solid var(--black);
+    background: var(--white);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: #f0f0f0; }
+  .btn-primary {
+    padding: 10px 24px;
+    border: 2px solid var(--black);
+    background: var(--black);
+    color: var(--white);
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--coral);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn-primary:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--coral);
+  }
+
+  /* ── Banner de caché ── */
+  .cache-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 32px;
+    font-size: 0.82rem;
+    border-bottom: var(--border);
+  }
+  .cache-banner-hidden { display: none; }
+  .cache-banner-neutral { background: var(--bg-accent); color: var(--muted); }
+  .cache-banner-amber { background: #fff8e6; color: #7c4d00; }
+  .delivery-banner {
+    padding: 10px 32px;
+    font-size: 0.82rem;
+    border-bottom: var(--border);
+  }
+  .delivery-banner-hidden { display: none; }
+  .delivery-banner-success {
+    background: #eafaf0;
+    color: #145c28;
+  }
+  .delivery-banner-warning {
+    background: #fff8e6;
+    color: #7c4d00;
+  }
+  .btn-force-new {
+    padding: 5px 14px;
+    border: var(--border);
+    background: var(--white);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-force-new:hover { background: var(--black); color: var(--white); }
+
+  /* ── Navbar ── */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 72px;
+    border-bottom: var(--border);
+    background: var(--white);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+  }
+  .nav-links {
+    display: flex;
+    gap: 32px;
+    font-size: 0.9rem;
+  }
+  .nav-links a::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: var(--coral);
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .nav-links a:hover { text-decoration: underline; }
+  .btn-nav {
+    background: var(--coral);
+    border: var(--border);
+    box-shadow: var(--shadow-dark);
+    padding: 8px 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn-nav:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--black);
+  }
+
+  /* ── Barra URL ── */
+  .url-bar {
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+    height: 48px;
+    border-bottom: var(--border);
+    background: var(--bg-accent);
+    gap: 0;
+  }
+  .url-input {
+    flex: 1;
+    height: 32px;
+    border: var(--border);
+    border-right: none;
+    padding: 0 14px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    background: var(--white);
+    outline: none;
+    color: var(--dark);
+  }
+  .btn-analyze {
+    height: 32px;
+    padding: 0 16px;
+    background: var(--black);
+    color: var(--white);
+    border: var(--border);
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+  }
+  .btn-analyze:hover { background: var(--dark); }
+
+  /* ── Layout principal ── */
+  .analysis-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    height: calc(100vh - 72px - 48px - 56px);
+    overflow: hidden;
+  }
+
+  /* ── Banner de recomendación móvil ── */
+  .mobile-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 20px;
+    background: #fff8e6;
+    border-bottom: var(--border);
+    font-size: 0.8rem;
+    color: #7c4d00;
+  }
+  .mobile-banner-text {
+    flex: 1;
+  }
+  .mobile-banner-close {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #7c4d00;
+    background: transparent;
+    color: #7c4d00;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 900px) {
+    .measure-limit-panel {
+      grid-template-columns: 1fr;
+    }
+    .doc-state-card {
+      padding: 18px;
+      box-shadow: 3px 3px 0 var(--black);
+    }
+    .doc-state-metrics {
+      grid-template-columns: 1fr;
+    }
+    .analysis-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      height: auto;
+      min-height: calc(100vh - 72px - 48px - 56px);
+      overflow: visible;
+    }
+    aside {
+      border-right: none;
+      border-bottom: var(--border);
+      overflow-x: auto;
+      overflow-y: hidden;
+      height: 56px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0;
+      padding: 0 8px;
+      scrollbar-width: none;
+    }
+    aside::-webkit-scrollbar { display: none; }
+    .sidebar-header {
+      display: none;
+    }
+    .agent-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-bottom: none;
+      border-right: 1px solid var(--light);
+      padding: 4px 10px;
+      gap: 2px;
+      min-width: max-content;
+      height: 100%;
+    }
+    .agent-row:last-child {
+      border-right: none;
+    }
+    .agent-check {
+      width: 14px;
+      height: 14px;
+      font-size: 0.6rem;
+    }
+    .agent-info {
+      gap: 0;
+    }
+    .agent-label {
+      font-size: 0.7rem;
+      white-space: nowrap;
+    }
+    .agent-sub {
+      display: none;
+    }
+    .agent-status {
+      font-size: 0.65rem;
+      white-space: nowrap;
+    }
+    main {
+      overflow-y: auto;
+      height: calc(100vh - 72px - 48px - 56px - 56px);
+    }
+    #doc-body {
+      margin: 18px 16px;
+      padding: 18px 16px;
+      box-shadow: 3px 3px 0 var(--black);
+    }
+  }
+
+  @media (max-height: 760px) {
+    .popup-overlay {
+      align-items: flex-start;
+      overflow-y: auto;
+      padding: 12px 0;
+    }
+    .popup-card {
+      max-height: none;
+      min-height: calc(100svh - 24px);
+      margin: 12px;
+    }
+    .popup-header {
+      padding: 22px 22px 16px;
+    }
+    .popup-body {
+      padding: 16px 22px;
+      gap: 14px;
+    }
+    .popup-footer {
+      padding: 14px 22px 18px;
+    }
+  }
+
+
+  /* ── Sidebar ── */
+  aside {
+    border-right: var(--border);
+    background: var(--white);
+    overflow-y: auto;
+  }
+  .sidebar-header {
+    padding: 12px 16px;
+    border-bottom: var(--border);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: #f8f8f8;
+  }
+  .agent-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--light);
+  }
+  .agent-row.row-done { background: #fafff8; }
+  .agent-check {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--border);
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    background: var(--white);
+  }
+  .agent-check.check-done {
+    background: var(--green);
+    color: var(--black);
+    font-weight: 700;
+    border-color: var(--black);
+  }
+  .agent-check.check-running {
+    color: var(--dark);
+    background: var(--coral);
+  }
+  .agent-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+  .agent-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .wiki-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--black);
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-style: normal;
+    color: var(--black);
+    text-decoration: none;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .wiki-link:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+  .agent-sub {
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .agent-status {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    white-space: nowrap;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .agent-status.status-completado { color: #1a7f37; font-weight: 700; }
+  .agent-status.status-en-curso { color: #0070f3; }
+
+  /* ── Área del documento ── */
+  main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: var(--border);
+    background: var(--white);
+    flex-shrink: 0;
+    gap: 16px;
+  }
+  .doc-title-area { min-width: 0; }
+  .doc-header h2 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--dark);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .doc-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    margin-top: 2px;
+  }
+  .doc-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn-action {
+    padding: 7px 18px;
+    border: var(--border);
+    background: var(--white);
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: background 0.1s;
+  }
+  .btn-action:not(:disabled):hover { background: #f0f0f0; }
+  .btn-action-primary:not(:disabled) {
+    background: var(--black);
+    color: var(--white);
+  }
+  .btn-action-primary:not(:disabled):hover { background: var(--dark); }
+  .btn-action:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Cuerpo del documento ── */
+  #doc-body {
+    flex: 1;
+    overflow-y: auto;
+    margin: 24px 28px;
+    padding: 20px 24px;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    box-shadow: 4px 4px 0 var(--black);
+    overflow-x: hidden;
+    word-break: break-word;
+  }
+  .doc-waiting { color: var(--muted); font-style: italic; font-size: 0.875rem; }
+  .doc-section {
+    border-bottom: 1px dashed var(--light);
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+  }
+  .doc-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+  .doc-final {
+    color: var(--dark);
+  }
+  .doc-error { color: #c00; font-size: 0.875rem; }
+  .doc-markdown-fallback {
+    background: #1a1a1a;
+    color: #e8e8e8;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  .prose {
+    color: var(--dark);
+    line-height: 1.75;
+    font-size: 0.95rem;
+    overflow-x: hidden;
+  }
+  .prose h1 {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 400;
+    margin: 0 0 16px;
+    line-height: 1.2;
+    border-bottom: 2px solid var(--black);
+    padding-bottom: 10px;
+  }
+  .prose h2 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 400;
+    margin: 36px 0 12px;
+    border-left: 4px solid var(--coral);
+    padding-left: 12px;
+  }
+  .prose h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 24px 0 8px;
+  }
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 18px 0 6px;
+  }
+  .prose p { margin: 0 0 14px; }
+  .prose ul,
+  .prose ol {
+    margin: 0 0 14px;
+    padding-left: 48px;
+  }
+  .prose li { margin: 4px 0; }
+  .prose strong { font-weight: 700; }
+  .prose em { font-style: italic; }
+  .prose hr {
+    border: none;
+    border-top: 2px solid #e0e0e0;
+    margin: 28px 0;
+  }
+  .prose blockquote {
+    border-left: 4px solid var(--coral);
+    padding: 8px 16px;
+    margin: 16px 0;
+    background: #fafafa;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .prose blockquote p { margin: 0; }
+  .prose code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: #f3f3f3;
+    border: 1px solid #e0e0e0;
+    padding: 2px 5px;
+    border-radius: 2px;
+    word-break: break-all;
+  }
+  .prose pre {
+    background: #1a1a1a;
+    color: #e8e8e8;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    word-break: normal;
+    white-space: pre;
+    max-width: 100%;
+  }
+  .prose pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    word-break: normal;
+    color: inherit;
+  }
+  .prose table {
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.875rem;
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .prose th {
+    background: var(--black);
+    color: var(--white);
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  .prose td {
+    padding: 7px 14px;
+    border-bottom: 1px solid #e5e5e5;
+    vertical-align: top;
+  }
+  .prose tr:nth-child(even) td { background: #fafafa; }
+  .prose tr:last-child td { border-bottom: 2px solid var(--black); }
+  .prose .mermaid {
+    margin: 24px 0;
+    text-align: center;
+    overflow-x: auto;
+    padding: 16px;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    background: #fafafa;
+  }
+  .prose .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .prose .mermaid-error {
+    background: #1a1a1a;
+    color: #e8e8e8;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    white-space: pre;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+  .prose .mermaid-error code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+  }
+
+  /* ── Footer ── */
+  footer {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    border-top: var(--border);
+    flex-shrink: 0;
+  }
+  .footer-copy { font-size: 0.8rem; color: var(--muted); }
+  .footer-links { display: flex; gap: 8px; }
+  .btn-footer {
+    font-size: 0.8rem;
+    padding: 5px 14px;
+    border: var(--border);
+    background: var(--white);
+    box-shadow: var(--shadow);
+  }
+  .btn-footer:hover { background: var(--black); color: var(--white); }
+</style>

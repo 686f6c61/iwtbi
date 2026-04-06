@@ -1,0 +1,853 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="Cómo funciona"
+  description="Cuatro pasos para convertir cualquier repositorio público de GitHub en documentación estructurada lista para que Claude Code, Gemini CLI o Codex CLI lo reconstruyan."
+  keywords="cómo funciona IWTBI, análisis repositorio IA, pipeline Ollama, agentes open source, documentación para Claude, reconstruir proyecto con IA, ingeniería inversa repositorio"
+  activeLink="como-funciona"
+  navCtaText="Probar ahora"
+  navCtaHref="/analyze"
+>
+
+  <!-- Contenido -->
+  <main>
+    <section class="hero">
+      <h1>¿Cómo funciona?</h1>
+      <p class="subtitle">
+        Pegas una URL de GitHub y obtienes un documento exhaustivo —arquitectura,
+        stack, APIs, lógica de negocio— listo para que un agente de IA
+        reconstruya el proyecto desde cero.
+      </p>
+    </section>
+
+    <!-- Grid de 4 pasos -->
+    <section class="steps-grid">
+      <div class="step-card">
+        <span class="step-num">01</span>
+        <h2>Sustituye la URL</h2>
+        <p>
+          En la barra del navegador, cambia <code>github.com</code> por
+          <code>app.example.com</code>. Sin extensiones, sin herramientas extra. Solo
+          editar dos palabras.
+        </p>
+      </div>
+      <div class="step-card">
+        <span class="step-num">02</span>
+        <h2>Confirma el repositorio</h2>
+        <p>
+          IWTBI identifica el repo, muestra el número de archivos y te pide
+          confirmación. Un clic en Analizar arranca el proceso.
+        </p>
+      </div>
+      <div class="step-card">
+        <span class="step-num">03</span>
+        <h2>Los agentes analizan</h2>
+        <p>
+          Ocho agentes especializados —Grace Hopper, Alan Kay, Barbara Liskov,
+          Roy Fielding, Hedy Lamarr, Donald Knuth, Lynn Conway y Tim
+          Berners-Lee— trabajan en paralelo sobre modelos open source
+          orquestados con Ollama. Ves su progreso en tiempo real.
+        </p>
+      </div>
+      <div class="step-card">
+        <span class="step-num">04</span>
+        <h2>Lleva el documento a tu agente</h2>
+        <p>
+          Descarga o copia la documentación generada. Pégala como contexto en
+          Claude Code, Gemini CLI o Codex CLI y el agente reconstruye el
+          proyecto completo.
+        </p>
+      </div>
+    </section>
+
+    <!-- Sección de agentes -->
+    <section class="agents-section">
+      <h2 class="agents-title">Qué hace cada agente</h2>
+      <div class="agents-grid">
+        <div class="agent-card">
+          <span class="agent-card-name">Grace Hopper <a href="https://es.wikipedia.org/wiki/Grace_Hopper" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Stack tecnológico</span>
+          <p class="agent-card-desc">Detecta lenguajes, frameworks y herramientas de build.</p>
+        </div>
+        <div class="agent-card">
+          <span class="agent-card-name">Alan Kay <a href="https://es.wikipedia.org/wiki/Alan_Kay" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Arquitectura</span>
+          <p class="agent-card-desc">Mapea directorios, patrones y relaciones entre módulos.</p>
+        </div>
+        <div class="agent-card">
+          <span class="agent-card-name">Barbara Liskov <a href="https://es.wikipedia.org/wiki/Barbara_Liskov" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Base de datos</span>
+          <p class="agent-card-desc">Identifica esquemas, migraciones, ORMs y modelos de datos.</p>
+        </div>
+        <div class="agent-card">
+          <span class="agent-card-name">Roy Fielding <a href="https://es.wikipedia.org/wiki/Roy_Fielding" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">API y contratos</span>
+          <p class="agent-card-desc">Documenta endpoints, métodos HTTP y contratos de datos.</p>
+        </div>
+        <div class="agent-card">
+          <span class="agent-card-name">Hedy Lamarr <a href="https://es.wikipedia.org/wiki/Hedy_Lamarr" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Frontend</span>
+          <p class="agent-card-desc">Analiza componentes, estilos y decisiones de interfaz.</p>
+        </div>
+        <div class="agent-card">
+          <span class="agent-card-name">Donald Knuth <a href="https://es.wikipedia.org/wiki/Donald_Knuth" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Lógica de negocio</span>
+          <p class="agent-card-desc">Extrae reglas de negocio, flujos y algoritmos clave.</p>
+        </div>
+        <div class="agent-card">
+          <span class="agent-card-name">Lynn Conway <a href="https://es.wikipedia.org/wiki/Lynn_Conway" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">DevOps y despliegue</span>
+          <p class="agent-card-desc">Revisa contenedores, CI/CD y configuración de entornos.</p>
+        </div>
+        <div class="agent-card agent-card-integrador">
+          <span class="agent-card-name">Tim Berners-Lee <a href="https://es.wikipedia.org/wiki/Tim_Berners-Lee" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Integrador</span>
+          <p class="agent-card-desc">Unifica los siete análisis en un documento final coherente.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección: el objetivo -->
+    <section class="objective-section">
+      <h2 class="agents-title">El objetivo</h2>
+      <div class="objective-split">
+
+        <!-- Panel izquierdo: el problema -->
+        <div class="obj-panel obj-panel-problem">
+          <span class="obj-label">Sin IWTBI</span>
+          <ul class="obj-list">
+            <li>
+              <span class="obj-mark obj-mark-bad">×</span>
+              <div>
+                <strong>Horas leyendo código</strong>
+                <span>Entender la arquitectura de un repo ajeno exige recorrer cientos de ficheros a mano.</span>
+              </div>
+            </li>
+            <li>
+              <span class="obj-mark obj-mark-bad">×</span>
+              <div>
+                <strong>Dependencias implícitas</strong>
+                <span>Las relaciones entre módulos raramente están documentadas; hay que inferirlas.</span>
+              </div>
+            </li>
+            <li>
+              <span class="obj-mark obj-mark-bad">×</span>
+              <div>
+                <strong>Flujos sin documentar</strong>
+                <span>La lógica de negocio vive en el código, no en un documento que un agente pueda leer.</span>
+              </div>
+            </li>
+            <li>
+              <span class="obj-mark obj-mark-bad">×</span>
+              <div>
+                <strong>Propenso a errores</strong>
+                <span>El análisis manual olvida detalles críticos que luego bloquean la reconstrucción.</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Panel derecho: la solución -->
+        <div class="obj-panel obj-panel-solution">
+          <span class="obj-label">Con IWTBI</span>
+          <p class="obj-tagline">
+            Un <strong>documento de contexto estructurado</strong> listo para
+            que Claude Code, Gemini CLI o Codex CLI reconstruyan el producto.
+          </p>
+          <ul class="obj-list obj-list-solution">
+            <li>
+              <span class="obj-mark obj-mark-good">+</span>
+              <div>
+                <strong>Stack y dependencias</strong>
+                <span>Lenguajes, frameworks y herramientas de build detectados automáticamente.</span>
+              </div>
+            </li>
+            <li>
+              <span class="obj-mark obj-mark-good">+</span>
+              <div>
+                <strong>Arquitectura y patrones</strong>
+                <span>Mapa de módulos, capas y relaciones entre componentes.</span>
+              </div>
+            </li>
+            <li>
+              <span class="obj-mark obj-mark-good">+</span>
+              <div>
+                <strong>Contratos de API</strong>
+                <span>Endpoints, métodos HTTP, esquemas de entrada y salida.</span>
+              </div>
+            </li>
+            <li>
+              <span class="obj-mark obj-mark-good">+</span>
+              <div>
+                <strong>Lógica de negocio</strong>
+                <span>Reglas, flujos y algoritmos clave extraídos del código.</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Sección: pipeline con Ollama -->
+    <section class="pipeline-section">
+      <h2 class="agents-title">Modelos open source sobre Ollama</h2>
+      <div class="pipeline-features">
+        <div class="pipe-feat">
+          <span class="pipe-feat-label">Ollama local</span>
+          <p class="pipe-feat-desc">Modelos open source gestionados en el servidor. Sin llamadas a APIs de terceros.</p>
+        </div>
+        <div class="pipe-feat">
+          <span class="pipe-feat-label">Contexto especializado</span>
+          <p class="pipe-feat-desc">Cada agente recibe solo los ficheros relevantes para su área. Menos ruido, mejor análisis.</p>
+        </div>
+        <div class="pipe-feat pipe-feat-highlight">
+          <span class="pipe-feat-label">8 agentes en paralelo</span>
+          <p class="pipe-feat-desc">Trabajan simultáneamente. Tim Berners-Lee integra los resultados en un único documento coherente.</p>
+        </div>
+        <div class="pipe-feat">
+          <span class="pipe-feat-label">Streaming en tiempo real</span>
+          <p class="pipe-feat-desc">El usuario ve el progreso agente a agente, sin esperar a que termine el análisis completo.</p>
+        </div>
+      </div>
+      <!-- Terminal pipeline: simula la salida de un análisis real -->
+      <div class="term-window">
+
+        <!-- Chrome de ventana de terminal -->
+        <div class="term-bar">
+          <span class="term-dot term-dot-red"></span>
+          <span class="term-dot term-dot-yellow"></span>
+          <span class="term-dot term-dot-green"></span>
+          <span class="term-title">~/iwtbi/analyze</span>
+        </div>
+
+        <div class="term-body">
+          <!-- Comando de entrada -->
+          <p class="term-prompt">
+            <span class="term-ps">$</span>
+            iwtbi analyze
+            <span class="term-url">https://github.com/usuario/repo</span>
+          </p>
+
+          <div class="term-spacer"></div>
+
+          <!-- Pasos -->
+          <div class="term-step">
+            <span class="term-num">[1/6]</span>
+            <span class="term-label">Inicializando IWTBI</span>
+            <span class="term-fill"></span>
+            <span class="term-ok">&#10003;</span>
+          </div>
+          <div class="term-step">
+            <span class="term-num">[2/6]</span>
+            <span class="term-label">Clonando repositorio</span>
+            <span class="term-fill"></span>
+            <span class="term-ok">&#10003;</span>
+          </div>
+          <div class="term-step">
+            <span class="term-num">[3/6]</span>
+            <span class="term-label">Ejecutando Pipeline Ollama</span>
+            <span class="term-fill"></span>
+            <span class="term-ok">&#10003;</span>
+          </div>
+          <div class="term-agents">
+            <span class="term-tree">&#9492;&#9472;</span>
+            Grace Hopper &middot; Alan Kay &middot; Barbara Liskov &middot; Roy Fielding
+          </div>
+          <div class="term-agents term-agents-cont">
+            &nbsp;&nbsp;&nbsp;Hedy Lamarr &middot; Donald Knuth &middot; Lynn Conway &middot; Tim Berners-Lee
+          </div>
+          <div class="term-step">
+            <span class="term-num">[4/6]</span>
+            <span class="term-label">Generando documento de contexto</span>
+            <span class="term-fill"></span>
+            <span class="term-ok">&#10003;</span>
+          </div>
+          <div class="term-step">
+            <span class="term-num">[5/6]</span>
+            <span class="term-label">Exportando &rarr; Claude &middot; Gemini &middot; Codex</span>
+            <span class="term-fill"></span>
+            <span class="term-ok">&#10003;</span>
+          </div>
+          <div class="term-step term-step-final">
+            <span class="term-num">[6/6]</span>
+            <span class="term-label-final">I Built It</span>
+            <span class="term-fill"></span>
+            <span class="term-ok term-ok-final">&#10003;</span>
+          </div>
+
+          <div class="term-spacer"></div>
+          <p class="term-meta">
+            Análisis completado &nbsp;&middot;&nbsp; ~3&ndash;5 min &nbsp;&middot;&nbsp; 8 agentes en paralelo
+          </p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Banner truco de URL -->
+    <section class="url-trick">
+      <div class="url-trick-text">
+        <h2>Magic URL</h2>
+        <p class="url-example">
+          github.com/usuario/repo &nbsp;&rarr;&nbsp; app.example.com/usuario/repo
+        </p>
+        <p class="url-hint">
+          Cambia dos palabras en la barra del navegador. Sin instalar nada.
+        </p>
+      </div>
+      <a href="/analyze" class="btn-try">Analizar</a>
+    </section>
+  </main>
+
+</Layout>
+
+<style>
+  /* ── Navbar ── */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 72px;
+    border-bottom: var(--border);
+    background: var(--white);
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+  }
+  .nav-links {
+    display: flex;
+    gap: 32px;
+    font-size: 0.9rem;
+  }
+  .nav-links a::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: var(--coral);
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .nav-links a:hover {
+    text-decoration: underline;
+  }
+  .active {
+    font-weight: 700;
+  }
+  .btn-nav {
+    background: var(--coral);
+    border: var(--border);
+    box-shadow: var(--shadow-dark);
+    padding: 8px 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn-nav:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--black);
+  }
+
+  /* ── Hero ── */
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 64px 32px 80px;
+  }
+  .hero {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 2.8rem;
+    color: var(--black);
+    margin-bottom: 16px;
+  }
+  .subtitle {
+    font-size: 1rem;
+    color: var(--mid);
+    line-height: 1.6;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  /* ── 4 pasos ── */
+  .steps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+  .step-card {
+    border: var(--border);
+    box-shadow: var(--shadow);
+    background: var(--white);
+    padding: 28px;
+  }
+  .step-num {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    color: var(--light);
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+  .step-card h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--black);
+  }
+  .step-card p {
+    font-size: 0.875rem;
+    color: var(--mid);
+    line-height: 1.6;
+  }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    background: #f0f0f0;
+    padding: 1px 5px;
+    border: 1px solid var(--light);
+  }
+
+  /* ── Sección de agentes ── */
+  .agents-section {
+    margin-bottom: 48px;
+  }
+  .agents-title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--black);
+    margin: 0 0 16px;
+  }
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 640px) {
+    .agents-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .agent-card {
+    border: var(--border);
+    background: var(--white);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .agent-card-integrador {
+    background: var(--coral);
+  }
+  .agent-card-name {
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    color: var(--black);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .wiki-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--black);
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-style: normal;
+    color: var(--black);
+    text-decoration: none;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .wiki-link:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+  .agent-card-area {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .agent-card-desc {
+    font-size: 0.8rem;
+    color: var(--mid);
+    line-height: 1.5;
+    margin: 4px 0 0;
+  }
+
+  /* ── Sección objetivo ── */
+  .objective-section {
+    margin-bottom: 48px;
+  }
+  .objective-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: var(--border);
+    box-shadow: var(--shadow);
+  }
+  @media (max-width: 640px) {
+    .objective-split { grid-template-columns: 1fr; }
+  }
+  .obj-panel {
+    padding: 28px;
+  }
+  .obj-panel-problem {
+    background: var(--black);
+    border-right: var(--border);
+  }
+  @media (max-width: 640px) {
+    .obj-panel-problem { border-right: none; border-bottom: var(--border); }
+  }
+  .obj-panel-solution {
+    background: var(--white);
+  }
+  .obj-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border: 2px solid;
+    margin-bottom: 20px;
+  }
+  .obj-panel-problem .obj-label {
+    border-color: var(--coral);
+    color: var(--coral);
+  }
+  .obj-panel-solution .obj-label {
+    border-color: var(--black);
+    color: var(--black);
+    background: var(--green);
+  }
+  .obj-tagline {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--mid);
+    margin-bottom: 20px;
+  }
+  .obj-tagline strong {
+    color: var(--black);
+  }
+  .obj-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .obj-list li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .obj-mark {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 900;
+    border: 2px solid;
+    margin-top: 1px;
+  }
+  .obj-mark-bad  { border-color: #ff6b6b; color: #ff6b6b; }
+  .obj-mark-good { border-color: var(--green); color: var(--green); background: rgba(200,245,200,0.15); }
+  .obj-list li div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .obj-panel-problem .obj-list li div strong {
+    font-size: 0.82rem;
+    color: var(--white);
+    font-weight: 700;
+  }
+  .obj-panel-problem .obj-list li div span {
+    font-size: 0.78rem;
+    color: #999;
+    line-height: 1.5;
+  }
+  .obj-panel-solution .obj-list li div strong {
+    font-size: 0.82rem;
+    color: var(--black);
+    font-weight: 700;
+  }
+  .obj-panel-solution .obj-list li div span {
+    font-size: 0.78rem;
+    color: var(--mid);
+    line-height: 1.5;
+  }
+
+  /* ── Pipeline Ollama ── */
+  .pipeline-section {
+    margin-bottom: 48px;
+  }
+  /* Tarjetas de características del pipeline */
+  .pipeline-features {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: var(--border);
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  @media (max-width: 640px) {
+    .pipeline-features { grid-template-columns: 1fr 1fr; }
+  }
+  .pipe-feat {
+    padding: 20px 18px;
+    border-right: var(--border);
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pipe-feat:last-child { border-right: none; }
+  @media (max-width: 640px) {
+    .pipe-feat:nth-child(2) { border-right: none; }
+    .pipe-feat:nth-child(3),
+    .pipe-feat:nth-child(4) { border-top: var(--border); }
+    .pipe-feat:nth-child(4) { border-right: none; }
+  }
+  .pipe-feat-highlight { background: var(--coral); }
+  .pipe-feat-label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--black);
+  }
+  .pipe-feat-desc {
+    font-size: 0.8rem;
+    color: var(--mid);
+    line-height: 1.55;
+  }
+  .pipe-feat-highlight .pipe-feat-desc { color: var(--dark); }
+  /* ── Terminal pipeline ── */
+  .term-window {
+    border: var(--border);
+    box-shadow: var(--shadow);
+    background: #0d0d0d;
+    margin-top: 24px;
+    overflow: hidden;
+  }
+
+  /* Barra de título estilo macOS */
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #1c1c1c;
+    border-bottom: 1px solid #333;
+  }
+  .term-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .term-dot-red    { background: #ff5f57; }
+  .term-dot-yellow { background: #febc2e; }
+  .term-dot-green  { background: #28c840; }
+  .term-title {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: #ffffff;
+    margin-left: 8px;
+    flex: 1;
+    text-align: center;
+  }
+
+  /* Cuerpo del terminal */
+  .term-body {
+    padding: 24px 28px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* Línea de comando */
+  .term-prompt {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: #ccc;
+    margin-bottom: 4px;
+  }
+  .term-ps {
+    color: var(--coral);
+    margin-right: 8px;
+    font-weight: 700;
+  }
+  .term-url { color: #7dd3fc; }
+
+  .term-spacer { height: 10px; }
+
+  /* Cada paso del pipeline */
+  .term-step {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.9;
+    color: #ccc;
+  }
+  .term-num {
+    color: #ffffff;
+    flex-shrink: 0;
+    min-width: 40px;
+  }
+  .term-label {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .term-fill {
+    flex: 1;
+    border-bottom: 1px dotted #333;
+    margin-bottom: 5px;
+    min-width: 16px;
+  }
+  .term-ok {
+    color: #4ade80;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* Agentes bajo el paso 3: alineados con el label (tras el [n/6] + gap) */
+  .term-agents {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #555;
+    /* 40px (min-width num) + 10px (gap) = 50px; +14px para el └ */
+    padding-left: 50px;
+    line-height: 1.8;
+  }
+  .term-tree { color: #3a3a3a; margin-right: 4px; }
+  .term-agents-cont { color: #444; }
+
+  /* Paso final: I Built It */
+  .term-step-final {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid #222;
+  }
+  .term-label-final {
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--white);
+    flex-shrink: 0;
+  }
+  .term-ok-final {
+    color: var(--coral);
+    font-size: 1rem;
+  }
+
+  /* Línea de metadatos */
+  .term-meta {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: #444;
+    margin-top: 6px;
+  }
+
+  /* ── Banner truco de URL ── */
+  .url-trick {
+    background: var(--black);
+    border: var(--border);
+    box-shadow: var(--shadow);
+    padding: 36px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+  }
+  .url-trick h2 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    color: var(--white);
+    margin-bottom: 10px;
+  }
+  .url-example {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--coral);
+    margin-bottom: 6px;
+  }
+  .url-hint {
+    font-size: 0.8rem;
+    color: #888;
+  }
+  .btn-try {
+    background: var(--coral);
+    border: 2px solid var(--white);
+    padding: 12px 24px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--black);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: opacity 0.1s;
+  }
+  .btn-try:hover {
+    opacity: 0.85;
+  }
+
+  /* ── Footer ── */
+  footer {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    border-top: var(--border);
+  }
+  .footer-copy {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .footer-links {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-footer {
+    font-size: 0.8rem;
+    padding: 5px 14px;
+    border: var(--border);
+    background: var(--white);
+    box-shadow: var(--shadow);
+  }
+  .btn-footer:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  @media (max-width: 480px) {
+    .agents-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

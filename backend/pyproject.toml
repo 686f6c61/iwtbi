@@ -1,0 +1,39 @@
+[project]
+name = "iwtbi-backend"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "langchain",
+    "langchain-openai",
+    "langchain-ollama",
+    "ollama",
+    "pydantic-settings",
+    "pydantic[email]",
+    "httpx",
+    "python-dotenv",
+    "supabase",
+    "resend",
+    "slowapi",  # rate limiting por IP sobre FastAPI
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Indica a hatchling qué directorio empaquetar.
+# Sin esto, la detección automática falla cuando app/ no está presente
+# en el momento de resolver los metadatos del wheel (ej. en Docker).
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

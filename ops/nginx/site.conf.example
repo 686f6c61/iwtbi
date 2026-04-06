@@ -1,0 +1,76 @@
+# Example reverse proxy configuration for a self-hosted IWTBI deployment.
+# Replace the domains, certificate paths, and upstream ports for your setup.
+
+limit_req_zone $binary_remote_addr zone=iwtbi_analyze:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=iwtbi_ticket:10m rate=30r/m;
+limit_req_zone $binary_remote_addr zone=iwtbi_preflight:10m rate=12r/m;
+
+server {
+    server_name app.example.com www.app.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3410;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+}
+
+server {
+    server_name api.example.com;
+
+    client_max_body_size 10M;
+    limit_req_status 429;
+
+    location = /api/ticket {
+        limit_req zone=iwtbi_ticket burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8410;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/preflight {
+        limit_req zone=iwtbi_preflight burst=3 nodelay;
+        proxy_pass http://127.0.0.1:8410;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/analyze {
+        limit_req zone=iwtbi_analyze burst=3 nodelay;
+        proxy_pass http://127.0.0.1:8410;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8410;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-Accel-Buffering "no" always;
+    }
+
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+}

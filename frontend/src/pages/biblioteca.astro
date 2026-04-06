@@ -1,0 +1,909 @@
+---
+/**
+ * Página /biblioteca — listado de todos los análisis guardados.
+ *
+ * Diseño: fondo #e8f4ff, cards blancas con borde negro y sombra negra,
+ * buscador client-side y banner contextual.
+ *
+ * Los datos se obtienen del backend en el cliente para mantener la lista
+ * siempre actualizada sin reconstruir el sitio estático.
+ */
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Biblioteca de análisis" activeLink="biblioteca">
+
+  <!-- ── Banner contextual (visible si ?notif=owner/repo en la URL) ───────── -->
+  <div id="notif-banner" class="notif-banner" hidden>
+    <div class="notif-left">
+      <span class="notif-title">Este repositorio ya fue analizado</span>
+      <span id="notif-sub" class="notif-sub"></span>
+    </div>
+    <div class="notif-actions">
+      <a id="notif-view" href="#" class="btn-notif-primary">Ver análisis</a>
+      <a id="notif-new" href="#" class="btn-notif-secondary">Análisis nuevo</a>
+    </div>
+  </div>
+
+  <!-- ── Cabecera ─────────────────────────────────────────────────────────── -->
+  <header class="page-header">
+    <div class="page-header-inner">
+      <div class="header-left">
+        <h1 class="page-title">Biblioteca</h1>
+        <p class="page-sub">Análisis guardados listos para reutilizar</p>
+      </div>
+      <div id="stat-chip" class="stat-chip" hidden>
+        <span id="stat-text"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Buscador + orden ───────────────────────────────────────────────── -->
+  <div class="controls-row">
+    <div class="search-group">
+      <input
+        id="search-input"
+        class="search-box"
+        type="search"
+        placeholder="Buscar en esta página..."
+        aria-label="Filtrar repositorios visibles"
+      />
+      <p class="search-help">Filtra solo los análisis visibles de esta página.</p>
+    </div>
+
+    <div class="sort-group">
+      <label for="sort-select" class="sort-label">Ordenar</label>
+      <div class="sort-shell">
+        <select id="sort-select" class="sort-select" aria-label="Ordenar análisis">
+          <option value="updated_desc">Más recientes</option>
+          <option value="updated_asc">Más antiguos</option>
+          <option value="name_asc">Nombre A-Z</option>
+          <option value="name_desc">Nombre Z-A</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Contenido principal ─────────────────────────────────────────────── -->
+  <main class="page-main">
+    <p id="loading-msg" class="loading-msg">Obteniendo análisis guardados...</p>
+    <p id="error-msg" class="error-msg" hidden>
+      No se pudo conectar con el servidor. Inténtalo de nuevo más tarde.
+    </p>
+    <div id="empty-state" class="empty-state" hidden>
+      <p class="empty-text">Todavía no hay ningún repositorio analizado.</p>
+      <a href="/" class="btn-primary">Analizar un repositorio</a>
+    </div>
+    <p id="no-results" class="no-results" hidden>
+      No hay resultados para esa búsqueda.
+    </p>
+    <div id="grid" class="grid"></div>
+    <div id="pagination-shell" class="pagination-shell" hidden>
+      <p id="page-summary" class="page-summary"></p>
+      <div id="pagination" class="pagination"></div>
+    </div>
+  </main>
+
+</Layout>
+
+<script>
+  const BACKEND_URL =
+    (import.meta as unknown as { env: Record<string, string> }).env
+      ?.PUBLIC_BACKEND_URL ?? "http://localhost:8410";
+
+  interface AnalysisEntry {
+    id: string;
+    repo_url: string;
+    repo_full_name: string;
+    git_sha: string;
+    tags: string[];
+    created_at: string;
+    updated_at: string;
+  }
+
+  type BibliotecaSort =
+    | "updated_desc"
+    | "updated_asc"
+    | "name_asc"
+    | "name_desc";
+
+  interface BibliotecaResponse {
+    items: AnalysisEntry[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+    sort: BibliotecaSort;
+  }
+
+  const PAGE_SIZE = 21;
+  const DEFAULT_SORT: BibliotecaSort = "updated_desc";
+  const ALLOWED_SORTS: BibliotecaSort[] = [
+    "updated_desc",
+    "updated_asc",
+    "name_asc",
+    "name_desc",
+  ];
+
+  function isBibliotecaSort(value: string | null): value is BibliotecaSort {
+    return Boolean(value && ALLOWED_SORTS.includes(value as BibliotecaSort));
+  }
+
+  function readBibliotecaState(): { page: number; sort: BibliotecaSort } {
+    const params = new URLSearchParams(window.location.search);
+    const pageParam = Number.parseInt(params.get("page") ?? "1", 10);
+    const sortParam = params.get("sort");
+
+    return {
+      page: Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1,
+      sort: isBibliotecaSort(sortParam) ? sortParam : DEFAULT_SORT,
+    };
+  }
+
+  function writeBibliotecaState(page: number, sort: BibliotecaSort) {
+    const params = new URLSearchParams(window.location.search);
+    if (page > 1) {
+      params.set("page", String(page));
+    } else {
+      params.delete("page");
+    }
+
+    if (sort !== DEFAULT_SORT) {
+      params.set("sort", sort);
+    } else {
+      params.delete("sort");
+    }
+
+    const query = params.toString();
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState({}, "", nextUrl);
+  }
+
+  function formatDate(iso: string): string {
+    return new Date(iso).toLocaleDateString("es-ES", {
+      day: "2-digit", month: "2-digit", year: "2-digit",
+    });
+  }
+
+  /**
+   * Construye la card de un análisis con DOM seguro (sin innerHTML).
+   * Usa textContent para todos los valores que vienen de la API.
+   */
+  function buildCard(entry: AnalysisEntry): HTMLElement {
+    const [owner, repo] = entry.repo_full_name.split("/");
+
+    const card = document.createElement("article");
+    card.className = "card";
+    card.dataset.name = entry.repo_full_name.toLowerCase();
+
+    // ── Sección superior ─────────────────────────────────────────────────
+    const top = document.createElement("div");
+    top.className = "card-top";
+
+    // Cabecera: nombre del repositorio
+    const header = document.createElement("div");
+    header.className = "card-header";
+
+    const nameBlock = document.createElement("div");
+    nameBlock.className = "card-name-block";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "card-name";
+    nameEl.textContent = `${owner} / ${repo}`;
+
+    const urlEl = document.createElement("span");
+    urlEl.className = "card-url";
+    urlEl.textContent = `github.com/${entry.repo_full_name}`;
+
+    nameBlock.appendChild(nameEl);
+    nameBlock.appendChild(urlEl);
+
+    header.appendChild(nameBlock);
+    top.appendChild(header);
+
+    // Chips de etiquetas (topics de GitHub). La fila siempre existe para que
+    // el bloque inferior quede alineado aunque el repo no tenga tags.
+    const tagsRow = document.createElement("div");
+    tagsRow.className = "card-tags";
+
+    if (entry.tags && entry.tags.length > 0) {
+      const visibleTags = entry.tags.slice(0, 3);
+      const extraCount  = entry.tags.length - visibleTags.length;
+
+      visibleTags.forEach((tag) => {
+        const chip = document.createElement("span");
+        chip.className = "tag-chip";
+        chip.textContent = tag;
+        tagsRow.appendChild(chip);
+      });
+
+      if (extraCount > 0) {
+        const more = document.createElement("span");
+        more.className = "tag-chip tag-chip-more";
+        more.textContent = `+${extraCount}`;
+        tagsRow.appendChild(more);
+      }
+    } else {
+      tagsRow.classList.add("card-tags-empty");
+      tagsRow.setAttribute("aria-hidden", "true");
+
+      const placeholder = document.createElement("span");
+      placeholder.className = "tag-chip tag-chip-placeholder";
+      placeholder.textContent = "Sin etiquetas";
+      tagsRow.appendChild(placeholder);
+    }
+
+    top.appendChild(tagsRow);
+
+    const metaRow = document.createElement("div");
+    metaRow.className = "card-meta-row";
+
+    const shaChip = document.createElement("span");
+    shaChip.className = "time-chip time-chip-sha";
+    shaChip.textContent = `SHA ${entry.git_sha.slice(0, 7)}`;
+    shaChip.title = `Commit ${entry.git_sha}`;
+
+    metaRow.appendChild(shaChip);
+    top.appendChild(metaRow);
+
+    // ── Acciones ─────────────────────────────────────────────────────────
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
+
+    const viewLink = document.createElement("a");
+    viewLink.href = `/biblioteca/view?repo=${encodeURIComponent(entry.repo_full_name)}&open=1`;
+    viewLink.className = "btn-view";
+    viewLink.textContent = "Ver análisis →";
+
+    const reanalyzeLink = document.createElement("a");
+    reanalyzeLink.href = `/analyze?url=${encodeURIComponent(entry.repo_url)}&force=true`;
+    reanalyzeLink.className = "btn-reanalyze";
+    reanalyzeLink.textContent = "Analizar de nuevo";
+
+    actions.appendChild(viewLink);
+    actions.appendChild(reanalyzeLink);
+
+    card.appendChild(top);
+    card.appendChild(actions);
+    return card;
+  }
+
+  /** Configura el banner contextual si viene un param ?notif=owner/repo. */
+  function setupNotifBanner() {
+    const notifRepo = new URLSearchParams(window.location.search).get("notif");
+    if (!notifRepo) return;
+
+    const banner  = document.getElementById("notif-banner")!;
+    const sub     = document.getElementById("notif-sub")!;
+    const viewBtn = document.getElementById("notif-view") as HTMLAnchorElement;
+    const newBtn  = document.getElementById("notif-new")  as HTMLAnchorElement;
+
+    sub.textContent = `Encontramos un análisis de ${notifRepo}. Puedes verlo o iniciar uno nuevo.`;
+    viewBtn.href = `/biblioteca/view?repo=${encodeURIComponent(notifRepo)}&open=1`;
+    newBtn.href  = `/analyze?url=${encodeURIComponent(`https://github.com/${notifRepo}`)}&force=true`;
+
+    banner.hidden = false;
+  }
+
+  /** Carga y renderiza todos los análisis de la biblioteca. */
+  async function loadBiblioteca() {
+    const loadingEl  = document.getElementById("loading-msg")!;
+    const errorEl    = document.getElementById("error-msg")!;
+    const emptyEl    = document.getElementById("empty-state")!;
+    const noResultEl = document.getElementById("no-results")!;
+    const gridEl     = document.getElementById("grid")!;
+    const statChip   = document.getElementById("stat-chip")!;
+    const statText   = document.getElementById("stat-text")!;
+    const searchEl   = document.getElementById("search-input") as HTMLInputElement;
+    const sortEl     = document.getElementById("sort-select") as HTMLSelectElement;
+    const paginationShell = document.getElementById("pagination-shell")!;
+    const paginationEl = document.getElementById("pagination")!;
+    const pageSummaryEl = document.getElementById("page-summary")!;
+
+    const state = readBibliotecaState();
+    sortEl.value = state.sort;
+
+    let response: BibliotecaResponse;
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/biblioteca?page=${state.page}&page_size=${PAGE_SIZE}&sort=${state.sort}`,
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      response = await res.json();
+    } catch {
+      loadingEl.hidden = true;
+      errorEl.hidden   = false;
+      return;
+    }
+
+    loadingEl.hidden = true;
+    errorEl.hidden = true;
+    gridEl.replaceChildren();
+    noResultEl.hidden = true;
+    emptyEl.hidden = true;
+
+    if (response.total > 0 && response.page > response.total_pages) {
+      writeBibliotecaState(response.total_pages, response.sort);
+      return loadBiblioteca();
+    }
+
+    if (response.total === 0) {
+      emptyEl.hidden = false;
+      paginationShell.hidden = true;
+      statChip.hidden = true;
+      return;
+    }
+
+    // Chip de contador
+    statText.textContent = `${response.total} en biblioteca`;
+    statChip.hidden = false;
+
+    // Renderizar la página actual
+    response.items.forEach((entry) => gridEl.appendChild(buildCard(entry)));
+
+    renderPagination({
+      container: paginationEl,
+      shell: paginationShell,
+      summary: pageSummaryEl,
+      page: response.page,
+      totalPages: response.total_pages,
+      total: response.total,
+      sort: response.sort,
+    });
+
+    // ── Buscador client-side ──────────────────────────────────────────────
+    const applySearchFilter = () => {
+      const q = searchEl.value.trim().toLowerCase();
+      let visible = 0;
+      // Usamos style.display en vez del atributo hidden porque .card { display: flex }
+      // tiene mayor especificidad que [hidden] { display: none } y lo sobreescribiría.
+      gridEl.querySelectorAll<HTMLElement>(".card").forEach((card) => {
+        const matches = !q || (card.dataset.name ?? "").includes(q);
+        card.style.display = matches ? "" : "none";
+        if (matches) visible++;
+      });
+      noResultEl.hidden = q.length === 0 || visible > 0;
+    };
+
+    searchEl.oninput = applySearchFilter;
+    applySearchFilter();
+
+    sortEl.onchange = () => {
+      const nextSort = isBibliotecaSort(sortEl.value) ? sortEl.value : DEFAULT_SORT;
+      writeBibliotecaState(1, nextSort);
+      loadBiblioteca();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+  }
+
+  function buildPaginationSequence(page: number, totalPages: number): Array<number | "ellipsis"> {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    if (page <= 3) {
+      return [1, 2, 3, 4, "ellipsis", totalPages];
+    }
+
+    if (page >= totalPages - 2) {
+      return [1, "ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+
+    return [1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages];
+  }
+
+  function buildPageButton(
+    label: string,
+    targetPage: number,
+    currentPage: number,
+    sort: BibliotecaSort,
+    variant: "page" | "nav" = "page",
+  ): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      variant === "nav" ? "pagination-btn pagination-btn-nav" : "pagination-btn";
+    button.textContent = label;
+
+    if (targetPage === currentPage && variant === "page") {
+      button.classList.add("pagination-btn-active");
+      button.disabled = true;
+      button.setAttribute("aria-current", "page");
+      return button;
+    }
+
+    button.addEventListener("click", () => {
+      writeBibliotecaState(targetPage, sort);
+      loadBiblioteca();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    return button;
+  }
+
+  function renderPagination(args: {
+    container: HTMLElement;
+    shell: HTMLElement;
+    summary: HTMLElement;
+    page: number;
+    totalPages: number;
+    total: number;
+    sort: BibliotecaSort;
+  }) {
+    const { container, shell, summary, page, totalPages, total, sort } = args;
+    container.replaceChildren();
+
+    if (totalPages <= 1) {
+      shell.hidden = true;
+      return;
+    }
+
+    summary.textContent = `Mostrando ${Math.min((page - 1) * PAGE_SIZE + 1, total)}-${Math.min(page * PAGE_SIZE, total)} de ${total} análisis`;
+
+    const prevButton = buildPageButton("← Anterior", Math.max(1, page - 1), page, sort, "nav");
+    prevButton.disabled = page === 1;
+    container.appendChild(prevButton);
+
+    buildPaginationSequence(page, totalPages).forEach((item) => {
+      if (item === "ellipsis") {
+        const ellipsis = document.createElement("span");
+        ellipsis.className = "pagination-ellipsis";
+        ellipsis.textContent = "···";
+        container.appendChild(ellipsis);
+        return;
+      }
+
+      container.appendChild(buildPageButton(String(item), item, page, sort));
+    });
+
+    const nextButton = buildPageButton("Siguiente →", Math.min(totalPages, page + 1), page, sort, "nav");
+    nextButton.disabled = page === totalPages;
+    container.appendChild(nextButton);
+
+    shell.hidden = false;
+  }
+
+  setupNotifBanner();
+  loadBiblioteca();
+</script>
+
+<style is:global>
+  /* ── Layout base ── */
+  /* La página usa fondo azul claro (#e8f4ff = --bg-accent) en lugar del
+     blanco por defecto de --bg, para coincidir con el diseño de Pencil.
+     Nota: is:global es necesario porque los elementos de las cards se crean
+     con document.createElement() en runtime y no reciben el atributo
+     data-astro-cid-* que Astro añade en build time al CSS scoped. */
+  /* El fondo blanco viene del Layout; no se sobreescribe aquí */
+
+  /* ── Banner contextual ── */
+  .notif-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 24px 56px 0;
+    padding: 14px 20px;
+    background: #fff3b0;
+    border: var(--border);
+    border-radius: 8px;
+    box-shadow: 3px 3px 0 var(--black);
+  }
+  .notif-banner[hidden] { display: none; }
+  .notif-left { display: flex; flex-direction: column; gap: 3px; }
+  .notif-title { font-weight: 700; font-size: 0.875rem; color: var(--black); }
+  .notif-sub   { font-size: 0.8rem; color: #333333; }
+  .notif-actions { display: flex; gap: 10px; flex-shrink: 0; }
+  .btn-notif-primary {
+    padding: 9px 18px;
+    background: var(--black);
+    color: var(--white);
+    border: var(--border);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: opacity 0.1s;
+  }
+  .btn-notif-primary:hover { opacity: 0.8; }
+  .btn-notif-secondary {
+    padding: 9px 18px;
+    background: var(--white);
+    color: var(--black);
+    border: var(--border);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.1s;
+  }
+  .btn-notif-secondary:hover { background: var(--bg-accent); }
+
+  /* ── Cabecera ── */
+  .page-header {
+    padding: 32px 56px 0;
+  }
+  .page-header-inner {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .header-left { display: flex; flex-direction: column; gap: 4px; }
+  .page-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 400;
+    margin: 0;
+    color: var(--black);
+    line-height: 1;
+  }
+  .page-sub { font-size: 0.94rem; color: #444444; margin: 0; }
+
+  /* Chip contador: "X en biblioteca" */
+  .stat-chip {
+    padding: 7px 14px;
+    background: var(--white);
+    border: var(--border);
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--black);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--black);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .stat-chip[hidden] { display: none; }
+
+  /* ── Controles ── */
+  .controls-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 24px 56px 0;
+  }
+  .search-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  .search-box {
+    width: 440px;
+    max-width: 100%;
+    height: 42px;
+    padding: 0 16px;
+    background: var(--white);
+    border: var(--border);
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--black);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--dark);
+    outline: none;
+    transition: box-shadow 0.1s;
+  }
+  .search-box::placeholder { color: #999999; }
+  .search-box:focus { box-shadow: 3px 3px 0 var(--black); }
+  .search-help {
+    font-size: 0.74rem;
+    color: var(--muted);
+  }
+  .sort-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 220px;
+    flex-shrink: 0;
+  }
+  .sort-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .sort-shell {
+    position: relative;
+  }
+  .sort-shell::after {
+    content: "▾";
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.9rem;
+    color: var(--black);
+    pointer-events: none;
+  }
+  .sort-select {
+    width: 100%;
+    height: 42px;
+    padding: 0 40px 0 14px;
+    background: var(--white);
+    border: var(--border);
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--black);
+    font-family: var(--font-sans);
+    font-size: 0.84rem;
+    color: var(--dark);
+    appearance: none;
+    outline: none;
+  }
+  .sort-select:focus { box-shadow: 3px 3px 0 var(--black); }
+
+  /* ── Contenido ── */
+  .page-main {
+    padding: 24px 56px 48px;
+    flex: 1;
+  }
+  .loading-msg { color: var(--muted); font-size: 0.875rem; font-style: italic; }
+  .error-msg   { color: #c00; font-size: 0.875rem; }
+  .no-results  { color: var(--muted); font-size: 0.875rem; font-style: italic; margin: 24px 0 0; }
+
+  /* Estado vacío: :not([hidden]) evita que display:flex sobreescriba el atributo hidden */
+  .empty-state:not([hidden]) {
+    text-align: center;
+    padding: 80px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .empty-text { font-size: 1rem; color: var(--muted); margin: 0; }
+  .btn-primary {
+    background: var(--black);
+    color: var(--white);
+    border: var(--border);
+    box-shadow: var(--shadow-dark);
+    padding: 12px 28px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn-primary:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--coral); }
+
+  /* ── Grid de cards ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px;
+    margin-top: 24px;
+  }
+
+  .pagination-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--light);
+  }
+  .pagination-shell[hidden] { display: none; }
+  .page-summary {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .pagination-btn {
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    border: var(--border);
+    background: var(--white);
+    box-shadow: 2px 2px 0 var(--black);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .pagination-btn:hover:not(:disabled) {
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 var(--black);
+  }
+  .pagination-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .pagination-btn-active {
+    background: var(--coral);
+    box-shadow: 2px 2px 0 var(--coral);
+    opacity: 1;
+  }
+  .pagination-btn-nav {
+    min-width: 112px;
+  }
+  .pagination-ellipsis {
+    min-width: 24px;
+    text-align: center;
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--white);
+    border: var(--border);
+    border-radius: 8px;
+    box-shadow: 4px 4px 0 var(--black);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 170px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--black); }
+
+  /* Sección superior */
+  .card-top {
+    display: grid;
+    grid-template-rows: auto minmax(28px, 28px) auto;
+    gap: 10px;
+    align-content: start;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .card-name-block { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+  .card-name {
+    font-family: var(--font-display);
+    font-size: 0.94rem;
+    font-weight: 400;
+    color: var(--black);
+    word-break: break-all;
+  }
+  .card-url {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: #777777;
+  }
+
+  /* Chips de etiquetas (topics de GitHub) */
+  .card-tags {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-height: 28px;
+    align-items: flex-start;
+    overflow: hidden;
+  }
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: var(--bg-accent);
+    border: 1px solid var(--black);
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--black);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tag-chip-more {
+    background: var(--white);
+    color: #777777;
+    flex-shrink: 0;
+  }
+  .card-tags-empty {
+    pointer-events: none;
+  }
+  .tag-chip-placeholder {
+    visibility: hidden;
+  }
+
+  .card-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 24px;
+    align-items: center;
+  }
+  .time-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--black);
+    white-space: nowrap;
+  }
+  .time-chip-sha {
+    color: #666666;
+  }
+
+  /* Acciones */
+  .card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .btn-view {
+    padding: 9px 18px;
+    background: var(--black);
+    color: var(--white);
+    border: var(--border);
+    border-radius: 6px;
+    box-shadow: 3px 3px 0 var(--coral);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.1s, box-shadow 0.1s;
+    white-space: nowrap;
+  }
+  .btn-view:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--coral); }
+
+  .btn-reanalyze {
+    padding: 9px 16px;
+    background: var(--white);
+    color: var(--black);
+    border: var(--border);
+    border-radius: 6px;
+    box-shadow: 3px 3px 0 var(--black);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.1s, box-shadow 0.1s, background 0.1s;
+    white-space: nowrap;
+  }
+  .btn-reanalyze:hover {
+    background: #fff5ef;
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--coral);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .page-header, .controls-row, .page-main {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+    .controls-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+    }
+    .sort-group {
+      min-width: 0;
+    }
+    .grid { grid-template-columns: 1fr; }
+    .search-box { width: 100%; }
+    .pagination-shell {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .pagination {
+      justify-content: flex-start;
+    }
+    .pagination-btn-nav {
+      min-width: 0;
+    }
+    .notif-banner { margin-left: 20px; margin-right: 20px; flex-direction: column; align-items: flex-start; }
+  }
+</style>

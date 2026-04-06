@@ -1,0 +1,157 @@
+---
+/**
+ * Navbar global de IWTBI.
+ *
+ * Diseño Pencil: logo en caja negra con sombra coral, enlace activo en
+ * píldora negra, el resto con punto coral decorativo.
+ *
+ * Props:
+ *   activeLink — nombre de la sección activa para resaltar el enlace.
+ *   ctaText    — texto del botón CTA derecho (por defecto «Nuevo análisis»).
+ *   ctaHref    — destino del botón CTA (por defecto «/»).
+ */
+interface Props {
+  activeLink?: "como-funciona" | "biblioteca";
+  ctaText?: string;
+  ctaHref?: string;
+}
+
+const {
+  activeLink,
+  ctaText = "Nuevo análisis",
+  ctaHref = "/",
+} = Astro.props;
+---
+
+<nav>
+  <a href="/" class="nav-logo">IWTBI</a>
+
+  <div class="nav-links">
+    <div class={`nav-item${activeLink === "como-funciona" ? " nav-item-active" : ""}`}>
+      {activeLink !== "como-funciona" && <span class="nav-dot"></span>}
+      <a href="/como-funciona">Cómo funciona</a>
+    </div>
+    <div class={`nav-item${activeLink === "biblioteca" ? " nav-item-active" : ""}`}>
+      {activeLink !== "biblioteca" && <span class="nav-dot"></span>}
+      <a href="/biblioteca">Biblioteca</a>
+    </div>
+  </div>
+
+  <a href={ctaHref} class="nav-cta">{ctaText}</a>
+</nav>
+
+<style>
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 56px;
+    height: 72px;
+    border-bottom: 2px solid var(--black);
+    background: var(--bg-accent);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  /* Logo: caja negra, texto blanco, sombra coral */
+  .nav-logo {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--white);
+    background: var(--black);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    padding: 8px 16px;
+    box-shadow: 3px 3px 0 var(--coral);
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 36px;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .nav-item a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .nav-item:hover a { text-decoration: underline; }
+
+  /* Punto decorativo coral para los enlaces no activos */
+  .nav-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--coral);
+    flex-shrink: 0;
+  }
+
+  /* Enlace activo: píldora negra con texto blanco */
+  .nav-item-active {
+    background: var(--black);
+    color: var(--white);
+    border-radius: 4px;
+    padding: 4px 12px;
+  }
+  .nav-item-active a { color: var(--white); }
+  .nav-item-active:hover a { text-decoration: underline; }
+
+  /* Botón CTA derecho */
+  .nav-cta {
+    background: var(--coral);
+    border: 2px solid var(--black);
+    box-shadow: 3px 3px 0 var(--black);
+    padding: 10px 24px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--black);
+    transition: transform 0.1s, box-shadow 0.1s;
+    white-space: nowrap;
+  }
+  .nav-cta:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--black);
+  }
+
+  @media (max-width: 640px) {
+    nav {
+      height: auto;
+      padding: 12px 20px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    .nav-logo {
+      align-self: flex-start;
+    }
+
+    .nav-links {
+      width: 100%;
+      justify-content: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-cta {
+      margin-left: 0;
+      padding: 10px 16px;
+      align-self: stretch;
+      text-align: center;
+    }
+  }
+</style>

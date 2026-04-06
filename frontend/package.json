@@ -1,0 +1,20 @@
+{
+  "name": "iwtbi-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "latest",
+    "dompurify": "latest",
+    "marked": "latest",
+    "mermaid": "latest"
+  },
+  "devDependencies": {
+    "@astrojs/sitemap": "latest",
+    "@types/dompurify": "latest",
+    "typescript": "latest"
+  }
+}

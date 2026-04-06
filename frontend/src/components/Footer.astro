@@ -1,0 +1,104 @@
+---
+/**
+ * Footer global de IWTBI.
+ *
+ * Contiene el crédito del autor y los enlaces rápidos (Twitter, GitHub,
+ * Changelog, Privacidad). El botón Changelog abre el modal global que
+ * se inicializa en Layout.astro a través de window.__openChangelog.
+ */
+---
+
+<footer>
+  <a
+    href="https://x.com/hex686f6c61"
+    target="_blank"
+    rel="noopener"
+    class="footer-credit"
+  >Creado por 686f6c61</a>
+
+  <div class="footer-links">
+    <a href="https://x.com/hex686f6c61" target="_blank" rel="noopener" class="btn-footer">
+      Twitter
+    </a>
+    <a href="https://github.com/686f6c61/iwtbi" target="_blank" rel="noopener" class="btn-footer">
+      GitHub
+    </a>
+    <button class="btn-footer btn-footer-accent" data-action="open-changelog">
+      Changelog
+    </button>
+    <a href="/legal" class="btn-footer btn-footer-accent">
+      Privacidad
+    </a>
+  </div>
+</footer>
+
+<style>
+  footer {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 56px;
+    border-top: 2px solid var(--black);
+    background: var(--bg-accent);
+  }
+
+  .footer-credit {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.1s;
+  }
+  .footer-credit:hover {
+    color: var(--black);
+    text-decoration: underline;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-footer {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    padding: 6px 14px;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    background: var(--white);
+    box-shadow: 2px 2px 0 var(--black);
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--black);
+    transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+  }
+  .btn-footer:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  .btn-footer-accent {
+    background: var(--coral);
+    box-shadow: 2px 2px 0 var(--black);
+  }
+  .btn-footer-accent:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  @media (max-width: 640px) {
+    footer {
+      height: auto;
+      padding: 16px 20px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .footer-links {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+  }
+</style>

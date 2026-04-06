@@ -1,0 +1,456 @@
+---
+/**
+ * Layout base de IWTBI.
+ *
+ * Fuentes del diseño:
+ * - Archivo Black: títulos display (headings grandes)
+ * - Public Sans: UI y cuerpo de texto
+ * - Courier New: código y monoespaciado (del sistema)
+ *
+ * Incluye el modal global de changelog, disponible en todas las páginas
+ * a través del botón «Changelog» del footer. Los datos se serializan en
+ * tiempo de build desde src/data/changelog.ts.
+ */
+import { CHANGELOG } from "../data/changelog";
+import Navbar from "../components/Navbar.astro";
+import Footer from "../components/Footer.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Palabras clave adicionales para el meta keywords de la página. */
+  keywords?: string;
+  /** Ruta absoluta a la imagen Open Graph (relativa a /public). Por defecto /og-image.png. */
+  ogImage?: string;
+  /** Sección activa del navbar para resaltar el enlace correspondiente. */
+  activeLink?: "como-funciona" | "biblioteca";
+  /** Texto del botón CTA del navbar. Por defecto «Nuevo análisis». */
+  navCtaText?: string;
+  /** Destino del botón CTA del navbar. Por defecto «/». */
+  navCtaHref?: string;
+}
+
+const SITE_URL = "https://app.example.com";
+const GA_MEASUREMENT_ID = "G-GRMZ1R10S6";
+const DEFAULT_DESCRIPTION =
+  "Analiza cualquier repositorio público de GitHub y genera documentación exhaustiva lista para reconstruirlo con Claude Code, Gemini CLI o Codex CLI.";
+const DEFAULT_KEYWORDS =
+  "análisis repositorio GitHub, documentación IA, ingeniería inversa código, Claude Code, Gemini CLI, Codex CLI, Ollama, modelos open source, pipeline agentes IA, reconstruir proyecto";
+
+const {
+  title,
+  description = DEFAULT_DESCRIPTION,
+  keywords = DEFAULT_KEYWORDS,
+  ogImage = "/og-image.png",
+  activeLink,
+  navCtaText = "Nuevo análisis",
+  navCtaHref = "/",
+} = Astro.props;
+
+/** URL canónica: usa la ruta actual dentro del dominio de producción. */
+const canonicalUrl = new URL(Astro.url.pathname, SITE_URL).toString();
+const ogImageAbsolute = new URL(ogImage, SITE_URL).toString();
+
+const changelogJson = JSON.stringify(CHANGELOG);
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- ── SEO base ── -->
+    <title>{title} — IWTBI</title>
+    <meta name="description" content={description} />
+    <meta name="keywords" content={keywords} />
+    <meta name="author" content="IWTBI" />
+    <link rel="canonical" href={canonicalUrl} />
+
+    <!-- ── Favicon ── -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+
+    <!-- ── Open Graph — cubre Facebook, LinkedIn, WhatsApp, Telegram, iMessage… ── -->
+    <!-- El protocolo OG es el estándar universal de previsualización en redes sociales. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={`${title} — IWTBI`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageAbsolute} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Logo de IWTBI — I Want To Build It" />
+    <meta property="og:site_name" content="IWTBI — I Want To Build It" />
+    <meta property="og:locale" content="es_ES" />
+
+    <!-- ── Twitter / X Card ── -->
+    <!-- summary_large_image muestra imagen grande en el tweet; summary muestra miniatura. -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:site" content="@iwtbi" />
+    <meta name="twitter:url" content={canonicalUrl} />
+    <meta name="twitter:title" content={`${title} — IWTBI`} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageAbsolute} />
+    <meta name="twitter:image:alt" content="Logo de IWTBI — I Want To Build It" />
+
+    <!-- ── LinkedIn específico ── -->
+    <!-- LinkedIn usa OG estándar; estos refuerzan la autoría y el tipo de contenido. -->
+    <meta property="article:author" content="https://www.linkedin.com/company/iwtbi" />
+
+    <!-- ── Buscadores ── -->
+    <!-- theme-color afecta a la barra de navegación en Chrome para Android. -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="application-name" content="IWTBI" />
+
+    <!-- ── Robots ── -->
+    <meta name="robots" content="index, follow" />
+
+    <!-- ── Google Analytics 4 ── -->
+    <!-- El script externo se carga con async: no bloquea el parse ni el render.     -->
+    <!-- El snippet inline se emite como script clásico (is:inline) para preservar   -->
+    <!-- window.dataLayer y la función gtag() global que espera el SDK de GA.        -->
+    <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
+    <script is:inline define:vars={{ gaMeasurementId: GA_MEASUREMENT_ID }}>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', gaMeasurementId);
+    </script>
+
+    <!-- ── Fuentes ── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Public+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <Navbar activeLink={activeLink} ctaText={navCtaText} ctaHref={navCtaHref} />
+    <div style="flex: 1; display: flex; flex-direction: column;">
+      <slot />
+    </div>
+    <Footer />
+
+    <!-- ── Modal changelog (global, disponible en todas las páginas) ── -->
+    <div id="cl-overlay" class="cl-overlay cl-hidden" role="dialog" aria-modal="true" aria-label="Changelog">
+      <div class="cl-modal">
+        <div class="cl-header">
+          <span class="cl-title">Changelog</span>
+          <button id="cl-close" class="cl-close" aria-label="Cerrar">×</button>
+        </div>
+        <div class="cl-scroll" id="cl-scroll">
+          <!-- Las entradas se renderizan por JavaScript desde window.__CHANGELOG__ -->
+        </div>
+      </div>
+    </div>
+
+    <script define:vars={{ changelogJson }}>
+      /**
+       * Inicializa el modal del changelog.
+       *
+       * Los datos proceden de changelogJson, serializado en build time desde
+       * src/data/changelog.ts, por lo que no se necesita ningún fetch en runtime.
+       */
+      window.__CHANGELOG__ = JSON.parse(changelogJson);
+
+      const CATEGORY_META = {
+        added:   { label: "Añadido",   cls: "cl-cat-added"   },
+        changed: { label: "Modificado", cls: "cl-cat-changed" },
+        fixed:   { label: "Corregido", cls: "cl-cat-fixed"   },
+      };
+
+      /** Construye el DOM de una entrada de versión usando métodos seguros (sin innerHTML). */
+      function buildVersionBlock(entry, isLatest) {
+        const wrap = document.createElement("div");
+        wrap.className = "cl-version";
+
+        // Cabecera: badge de versión + fecha
+        const head = document.createElement("div");
+        head.className = "cl-version-head";
+
+        const badge = document.createElement("span");
+        badge.className = isLatest ? "cl-badge cl-badge-latest" : "cl-badge";
+        badge.textContent = `v${entry.version}`;
+        head.appendChild(badge);
+
+        const date = document.createElement("span");
+        date.className = "cl-date";
+        date.textContent = entry.date;
+        head.appendChild(date);
+
+        wrap.appendChild(head);
+
+        // Secciones de categoría
+        for (const section of entry.sections) {
+          const meta = CATEGORY_META[section.type] ?? CATEGORY_META.added;
+
+          const catLabel = document.createElement("span");
+          catLabel.className = `cl-cat ${meta.cls}`;
+          catLabel.textContent = meta.label;
+          wrap.appendChild(catLabel);
+
+          const list = document.createElement("ul");
+          list.className = "cl-list";
+          for (const item of section.items) {
+            const li = document.createElement("li");
+            li.textContent = item;
+            list.appendChild(li);
+          }
+          wrap.appendChild(list);
+        }
+
+        return wrap;
+      }
+
+      function renderChangelog() {
+        const scroll = document.getElementById("cl-scroll");
+        if (!scroll || scroll.childElementCount > 0) return;
+
+        const entries = window.__CHANGELOG__;
+        entries.forEach((entry, i) => {
+          if (i > 0) {
+            const sep = document.createElement("hr");
+            sep.className = "cl-sep";
+            scroll.appendChild(sep);
+          }
+          scroll.appendChild(buildVersionBlock(entry, i === 0));
+        });
+      }
+
+      function openChangelog() {
+        renderChangelog();
+        const overlay = document.getElementById("cl-overlay");
+        overlay?.classList.remove("cl-hidden");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeChangelog() {
+        document.getElementById("cl-overlay")?.classList.add("cl-hidden");
+        document.body.style.overflow = "";
+      }
+
+      // Exponer openChangelog globalmente para que el botón del footer lo llame
+      window.__openChangelog = openChangelog;
+
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("cl-close")?.addEventListener("click", closeChangelog);
+        document.getElementById("cl-overlay")?.addEventListener("click", (e) => {
+          if (e.target === e.currentTarget) closeChangelog();
+        });
+        document.querySelector("[data-action='open-changelog']")
+          ?.addEventListener("click", openChangelog);
+      });
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg: #ffffff;
+    --bg-accent: #e8f4ff;
+    --black: #000000;
+    --dark: #222222;
+    --mid: #444444;
+    --muted: #888888;
+    --light: #e0e0e0;
+    --white: #ffffff;
+    --coral: #ffb5a7;
+    --green: #c8f5c8;
+    --border: 2px solid var(--black);
+    --shadow: 4px 4px 0 var(--coral);
+    --shadow-dark: 4px 4px 0 var(--black);
+    --font-display: "Archivo Black", sans-serif;
+    --font-sans: "Public Sans", sans-serif;
+    --font-mono: "Courier New", monospace;
+    --asset-rev-layout: 202604051500;
+  }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-sans);
+    color: var(--dark);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Logo de la navbar: icono PNG + texto en coral */
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    display: block;
+    flex-shrink: 0;
+  }
+  .logo-text {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+    color: var(--coral);
+  }
+
+  /* Botones de footer con acento coral (Changelog, Privacidad) */
+  .btn-footer-accent {
+    background: var(--coral) !important;
+    box-shadow: var(--shadow-dark) !important;
+  }
+  .btn-footer-accent:hover {
+    background: var(--black) !important;
+    color: var(--white) !important;
+    box-shadow: 6px 6px 0 var(--black) !important;
+  }
+
+  /* Enlace del footer «Creado por» — mantiene el aspecto de texto muted con hover sutil */
+  .footer-copy-link {
+    color: var(--muted);
+    font-size: 0.8rem;
+    transition: color 0.1s;
+  }
+  .footer-copy-link:hover {
+    color: var(--dark);
+    text-decoration: underline;
+  }
+
+  button {
+    font-family: var(--font-sans);
+    cursor: pointer;
+  }
+
+  /* ── Modal changelog ── */
+  .cl-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .cl-hidden { display: none !important; }
+
+  .cl-modal {
+    background: var(--white);
+    border: var(--border);
+    width: 560px;
+    max-width: calc(100vw - 32px);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 6px 6px 0 var(--coral);
+  }
+
+  .cl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 60px;
+    border-bottom: var(--border);
+    flex-shrink: 0;
+  }
+  .cl-title { font-family: var(--font-display); font-size: 1.1rem; }
+  .cl-close {
+    width: 32px;
+    height: 32px;
+    border: var(--border);
+    background: var(--white);
+    font-size: 1.1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s;
+  }
+  .cl-close:hover { background: var(--black); color: var(--white); }
+
+  /* Área con scroll invisible */
+  .cl-scroll {
+    overflow-y: scroll;
+    scrollbar-width: none;
+    padding: 20px 24px;
+    flex: 1;
+  }
+  .cl-scroll::-webkit-scrollbar { display: none; }
+
+  /* Bloque de versión */
+  .cl-version { padding-bottom: 20px; }
+  .cl-sep { border: none; border-top: 1px solid var(--light); margin: 0 0 20px; }
+
+  .cl-version-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .cl-badge {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border: var(--border);
+    background: #f0f0f0;
+  }
+  .cl-badge-latest { background: var(--coral); }
+  .cl-date { font-size: 0.75rem; color: var(--muted); }
+
+  /* Etiquetas de categoría */
+  .cl-cat {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border: 1px solid;
+    margin: 8px 0 6px;
+  }
+  .cl-cat-added   { background: #e8f5e9; border-color: #81c784; color: #2e7d32; }
+  .cl-cat-changed { background: #fff8e1; border-color: #ffd54f; color: #e65100; }
+  .cl-cat-fixed   { background: #fce4ec; border-color: #ef9a9a; color: #b71c1c; }
+
+  /* Lista de ítems */
+  .cl-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cl-list li {
+    font-size: 0.82rem;
+    color: #333;
+    line-height: 1.55;
+    padding-left: 14px;
+    position: relative;
+  }
+  .cl-list li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--muted);
+  }
+</style>

@@ -1,0 +1,790 @@
+---
+/**
+ * Página /biblioteca/view — visualización de un análisis guardado.
+ *
+ * Acceso: /biblioteca/view?repo=owner/repo
+ *
+ * Layout basado en el diseño Pencil «IWTBI · Resultado»:
+ *   - Fondo #e8f4ff
+ *   - Barra de búsqueda para re-analizar el repo
+ *   - Sidebar izquierdo (220px) con los 7 agentes y el sintetizador
+ *   - Área de documento (card blanca con sombra negra)
+ *
+ * El documento Markdown se renderiza con marked + DOMPurify + mermaid.
+ * Se usa <style is:global> porque .prose y los elementos de la sidebar
+ * se crean con document.createElement() en runtime y no reciben el
+ * atributo data-astro-cid-* del CSS scoped de Astro.
+ */
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="Análisis — Biblioteca" activeLink="biblioteca">
+
+  <!-- ── Barra de búsqueda / re-análisis ─────────────────────────────────── -->
+  <div class="view-search-row">
+    <div class="view-search-inner">
+      <div id="search-box-display" class="view-search-box">
+        <span id="repo-display" class="view-search-text">Cargando...</span>
+      </div>
+      <a id="reanalyze-btn" href="#" class="view-search-btn">Analizar →</a>
+    </div>
+  </div>
+
+  <!-- ── Banner de cambios (oculto por defecto) ──────────────────────────── -->
+  <div id="changes-banner" class="changes-banner changes-hidden">
+    <span id="changes-text"></span>
+    <a id="reanalyze-link" href="#" class="btn-reanalyze-banner">Analizar de nuevo</a>
+  </div>
+
+  <!-- ── Contenido principal: sidebar + documento ────────────────────────── -->
+  <div class="view-main">
+
+    <!-- Sidebar de agentes -->
+    <aside class="view-sidebar">
+      <span class="sidebar-title">Agentes implicados</span>
+      <div id="agents-list" class="agents-list">
+        <!-- Los agentes se renderizan por JS una vez cargado el análisis -->
+      </div>
+    </aside>
+
+    <!-- Área del documento -->
+    <div class="view-doc-area">
+
+      <!-- Cabecera del documento: título + acciones -->
+      <div class="doc-header">
+        <h1 id="doc-title" class="doc-title">Cargando análisis...</h1>
+        <div class="doc-actions">
+          <button id="copy-btn" disabled class="btn-action">Copiar</button>
+          <button id="download-btn" disabled class="btn-action btn-action-primary">Descargar .md</button>
+        </div>
+      </div>
+
+      <!-- Card del documento -->
+      <div id="doc-body" class="doc-body">
+        <p class="doc-waiting">Obteniendo análisis...</p>
+      </div>
+
+    </div>
+  </div>
+
+
+</Layout>
+
+<script>
+  import { marked, type Renderer } from "marked";
+  import DOMPurify from "dompurify";
+  import mermaid from "mermaid";
+
+  const BACKEND_URL =
+    (import.meta as unknown as { env: Record<string, string> }).env
+      ?.PUBLIC_BACKEND_URL ?? "http://localhost:8410";
+
+  // ── Configuración de marked ────────────────────────────────────────────────
+  // Renderer personalizado: bloques ```mermaid``` → <div class="mermaid">
+  const renderer: Partial<Renderer> = {
+    code({ text, lang }) {
+      if (lang === "mermaid") {
+        // No escapamos el contenido mermaid: DOMPurify preserva los text nodes
+        // tal cual y mermaid los lee via textContent. El normalizador corrige
+        // tipos SQL que mermaid 11 rechaza.
+        const normalized = normalizeMermaidSource(text);
+        const escaped = normalized
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return `<div class="mermaid">${escaped}</div>`;
+      }
+      const escaped = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<pre><code class="language-${lang ?? ""}">${escaped}</code></pre>`;
+    },
+  };
+  marked.use({ renderer });
+
+  // ── DOMPurify: permite SVG para los diagramas Mermaid ─────────────────────
+  const purifyConfig: DOMPurify.Config = {
+    ADD_TAGS: [
+      "svg", "use", "path", "circle", "rect", "line",
+      "polyline", "polygon", "text", "tspan", "g", "defs",
+      "marker", "foreignObject",
+    ],
+    ADD_ATTR: [
+      "viewBox", "xmlns", "d", "fill", "stroke", "stroke-width",
+      "transform", "x", "y", "width", "height", "cx", "cy", "r",
+      "points", "marker-end", "class", "id", "style",
+    ],
+  };
+
+  // ── Mermaid ────────────────────────────────────────────────────────────────
+  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
+
+  /**
+   * Normaliza el source de un bloque mermaid generado por LLMs.
+   *
+   * Los agentes tienden a usar tipos de datos SQL (integer, timestamp, bytea…)
+   * dentro de erDiagram. Mermaid 11 sólo acepta identificadores alfanuméricos
+   * sin espacios. Reemplazamos los más habituales para maximizar el éxito del render.
+   */
+  /**
+   * Normaliza el source de un bloque mermaid generado por LLMs para maximizar
+   * la compatibilidad con mermaid 11.x, que es más estricto que versiones anteriores.
+   *
+   * Correcciones aplicadas:
+   * - Tipos SQL (integer, timestamp, bytea…) → tipos mermaid (int, datetime, blob…)
+   *   Los agentes usan el vocabulario de PostgreSQL dentro de erDiagram.
+   * - @ en labels de nodos de flowchart: [@dnd-kit] → [dnd-kit]
+   *   El símbolo @ no está permitido en texto de nodos en mermaid 11.
+   * - / en labels de relaciones erDiagram: "ejecuta/recibe" → "ejecuta-recibe"
+   *   La barra provoca un error de parse en el analizador léxico de erDiagram.
+   */
+  function normalizeMermaidSource(src: string): string {
+    return src
+      // Tipos SQL → tipos mermaid (erDiagram)
+      .replace(/\binteger\b/g, "int")
+      .replace(/\btimestamp\b/g, "datetime")
+      .replace(/\bbytea\b/g, "blob")
+      .replace(/\bjsonb?\b/g, "string")
+      .replace(/\btext\b/g, "string")
+      .replace(/\bboolean\b/g, "bool")
+      .replace(/\bbigint\b/g, "int")
+      .replace(/\bnumeric\b/g, "float")
+      // @ dentro de labels de nodo: [texto@paquete] → [texto paquete]
+      .replace(/\[([^\]]*?)@([^\]]*?)\]/g, (_m, pre, post) => `[${(pre + post).trim() || "?"}]`)
+      // / dentro de labels de nodo de flowchart: [tailwindcss/postcss] → [tailwindcss-postcss]
+      .replace(/\[([^\]]*?)\/([^\]]*?)\]/g, (_m, pre, post) => `[${pre}-${post}]`)
+      // / dentro de labels de relación erDiagram: "ejecuta/recibe" → "ejecuta-recibe"
+      .replace(/:\s*"([^"]*?)\/([^"]*?)"/g, (_m, pre, post) => `: "${pre}-${post}"`)
+      // espacios dentro de labels de relación erDiagram: "puede ser" → "puede-ser"
+      .replace(/:\s*"([^"]+)"/g, (_m, label) => `: "${label.replace(/\s+/g, "-")}"`)
+      // doble constraint en atributos erDiagram: "PK FK" → "FK", "FK PK" → "FK", etc.
+      // Mermaid 11 solo acepta un constraint por atributo; el segundo token causa parse error.
+      .replace(/\b(PK|FK|UK)\s+(PK|FK|UK)\b/g, (_m, _first, second) => second);
+  }
+
+  // ── Agentes del pipeline (en el orden en que se ejecutan) ─────────────────
+  const AGENTS = [
+    { name: "Grace Hopper",   role: "Stack tecnológico"   },
+    { name: "Alan Kay",       role: "Arquitectura"         },
+    { name: "Barbara Liskov", role: "Base de datos"        },
+    { name: "Roy Fielding",   role: "API y contratos"      },
+    { name: "Hedy Lamarr",    role: "Frontend"             },
+    { name: "Donald Knuth",   role: "Lógica de negocio"    },
+    { name: "Lynn Conway",    role: "DevOps y despliegue"  },
+  ];
+
+  // ── Lógica de la página ────────────────────────────────────────────────────
+
+  const repo = new URLSearchParams(window.location.search).get("repo");
+  if (!repo) window.location.href = "/biblioteca";
+
+  const docBody  = document.getElementById("doc-body")!;
+  const docTitle = document.getElementById("doc-title")!;
+
+  /** Muestra un error en el área del documento. */
+  function showError(msg: string) {
+    docTitle.textContent = "Error";
+    while (docBody.firstChild) docBody.removeChild(docBody.firstChild);
+    const p = document.createElement("p");
+    p.className = "doc-error";
+    p.textContent = msg;
+    docBody.appendChild(p);
+  }
+
+  /**
+   * Renderiza el sidebar de agentes con los 7 agentes completados (verde)
+   * y el sintetizador (coral). Dado que el análisis está guardado, todos
+   * los agentes han completado su trabajo con éxito.
+   */
+  function renderAgents() {
+    const list = document.getElementById("agents-list")!;
+    list.innerHTML = "";
+
+    AGENTS.forEach((agent) => {
+      const item = document.createElement("div");
+      item.className = "agent-item agent-ok";
+
+      const check = document.createElement("span");
+      check.className = "agent-check";
+      check.textContent = "✓";
+
+      const info = document.createElement("div");
+      info.className = "agent-info";
+
+      const label = document.createElement("span");
+      label.className = "agent-label";
+      label.textContent = agent.name;
+
+      const role = document.createElement("span");
+      role.className = "agent-role";
+      role.textContent = agent.role;
+
+      info.appendChild(label);
+      info.appendChild(role);
+      item.appendChild(check);
+      item.appendChild(info);
+      list.appendChild(item);
+    });
+
+    // Separador
+    const sep = document.createElement("div");
+    sep.className = "agents-sep";
+    list.appendChild(sep);
+
+    // Sintetizador
+    const synthItem = document.createElement("div");
+    synthItem.className = "agent-item agent-synth";
+
+    const star = document.createElement("span");
+    star.className = "agent-check";
+    star.textContent = "★";
+
+    const synthInfo = document.createElement("div");
+    synthInfo.className = "agent-info";
+
+    const synthLabel = document.createElement("span");
+    synthLabel.className = "agent-label";
+    synthLabel.textContent = "Tim Berners-Lee";
+
+    const synthRole = document.createElement("span");
+    synthRole.className = "agent-role";
+    synthRole.textContent = "Integrador";
+
+    synthInfo.appendChild(synthLabel);
+    synthInfo.appendChild(synthRole);
+    synthItem.appendChild(star);
+    synthItem.appendChild(synthInfo);
+    list.appendChild(synthItem);
+  }
+
+  /** Carga y renderiza el análisis guardado. */
+  async function loadAnalysis() {
+    if (!repo) return;
+
+    // Actualizar barra de búsqueda con el repo actual
+    const repoDisplay = document.getElementById("repo-display")!;
+    repoDisplay.textContent = `github.com/${repo}`;
+
+    const repoUrl = `https://github.com/${repo}`;
+    const reanalyzeBtn = document.getElementById("reanalyze-btn") as HTMLAnchorElement;
+    reanalyzeBtn.href = `/?url=${encodeURIComponent(repoUrl)}`;
+
+    const reanalyzeLink = document.getElementById("reanalyze-link") as HTMLAnchorElement;
+    reanalyzeLink.href = `/?url=${encodeURIComponent(repoUrl)}&force=true`;
+
+    // Obtener el análisis del backend
+    let entry: Record<string, unknown>;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/biblioteca/${encodeURIComponent(repo)}`);
+      if (!res.ok) {
+        showError(
+          res.status === 404
+            ? `No hay análisis guardado para ${repo}.`
+            : "Error al obtener el análisis. Inténtalo de nuevo."
+        );
+        return;
+      }
+      entry = await res.json();
+    } catch {
+      showError("No se pudo conectar con el servidor.");
+      return;
+    }
+
+    const sha      = entry.git_sha as string;
+    const markdown = entry.document as string;
+
+    // Título del documento
+    docTitle.textContent = `${repo} — Documentación de construcción`;
+
+    // Renderizar sidebar de agentes
+    renderAgents();
+
+    // Convertir Markdown → HTML → sanitizar → insertar
+    const rawHtml  = await marked.parse(markdown);
+    const safeHtml = DOMPurify.sanitize(rawHtml, purifyConfig);
+
+    const prose = document.createElement("div");
+    prose.className = "prose";
+    // El HTML ha sido sanitizado con DOMPurify antes de asignarse a innerHTML
+    prose.innerHTML = safeHtml;
+    while (docBody.firstChild) docBody.removeChild(docBody.firstChild);
+    docBody.appendChild(prose);
+
+    // Renderizar diagramas Mermaid, uno a uno para aislar errores.
+    // mermaid.run() no lanza excepciones: en caso de error dibuja un SVG
+    // con el texto "Syntax error in text". Detectamos ese caso y reemplazamos
+    // el diagrama fallido por su código fuente en un bloque <pre>.
+    const mermaidNodes = prose.querySelectorAll<HTMLElement>(".mermaid");
+    for (const node of mermaidNodes) {
+      const source = node.textContent ?? "";
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch {
+        // En el raro caso de que mermaid lance una excepción real
+      }
+      const hasSyntaxError = Array.from(node.querySelectorAll("text")).some(
+        (t) => t.textContent?.includes("Syntax error")
+      );
+      if (hasSyntaxError) {
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        code.textContent = source;
+        pre.appendChild(code);
+        pre.className = "mermaid-error";
+        node.replaceWith(pre);
+      }
+    }
+
+    // Activar botones de copiar y descargar
+    const copyBtn = document.getElementById("copy-btn") as HTMLButtonElement;
+    const dlBtn   = document.getElementById("download-btn") as HTMLButtonElement;
+    copyBtn.disabled = false;
+    dlBtn.disabled   = false;
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(markdown).then(() => {
+        copyBtn.textContent = "Copiado";
+        setTimeout(() => { copyBtn.textContent = "Copiar"; }, 2000);
+      });
+    });
+
+    dlBtn.addEventListener("click", () => {
+      const blob = new Blob([markdown], { type: "text/markdown" });
+      const a    = document.createElement("a");
+      a.href     = URL.createObjectURL(blob);
+      a.download = `${repo.replace("/", "-")}.md`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // Comprobar si el SHA del repo ha cambiado (GitHub API pública)
+    checkShaChanges(repo, sha);
+  }
+
+  async function checkShaChanges(repoFullName: string, cachedSha: string) {
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${repoFullName}/commits/HEAD`,
+        { headers: { Accept: "application/vnd.github.sha" } }
+      );
+      if (!res.ok) return;
+      const currentSha = (await res.text()).trim();
+      if (currentSha && currentSha !== cachedSha) {
+        const banner = document.getElementById("changes-banner")!;
+        const text   = document.getElementById("changes-text")!;
+        banner.classList.remove("changes-hidden");
+        text.textContent = `El repositorio ${repoFullName} ha cambiado desde este análisis.`;
+      }
+    } catch {
+      // Si la comprobación falla (repo privado, rate limit), no se muestra aviso
+    }
+  }
+
+  loadAnalysis();
+</script>
+
+<style is:global>
+  /* El fondo blanco viene del Layout; no se sobreescribe aquí */
+
+  /* ── Barra de búsqueda ── */
+  .view-search-row {
+    padding: 10px 56px;
+    border-bottom: 2px solid var(--black);
+  }
+  .view-search-inner {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .view-search-box {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 8px;
+    box-shadow: 3px 3px 0 var(--black);
+  }
+  .view-search-text {
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--black);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .view-search-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 22px;
+    background: var(--black);
+    color: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 8px;
+    box-shadow: 3px 3px 0 var(--coral);
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .view-search-btn:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--coral); }
+
+  /* ── Banner de cambios ── */
+  .changes-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 56px;
+    background: #fff3b0;
+    border-bottom: 2px solid var(--black);
+    font-size: 0.82rem;
+    color: var(--black);
+  }
+  .changes-hidden { display: none; }
+  .btn-reanalyze-banner {
+    padding: 6px 16px;
+    border: 2px solid var(--black);
+    border-radius: 6px;
+    background: var(--white);
+    color: var(--black);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-shadow: 2px 2px 0 var(--black);
+    transition: background 0.1s;
+  }
+  .btn-reanalyze-banner:hover { background: var(--bg-accent); }
+
+  /* ── Layout principal (sidebar + doc) ── */
+  .view-main {
+    display: flex;
+    gap: 24px;
+    padding: 16px 56px 24px;
+    flex: 1;
+    align-items: flex-start;
+  }
+
+  /* ── Sidebar de agentes ── */
+  .view-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 8px;
+    box-shadow: 4px 4px 0 var(--black);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: sticky;
+    top: calc(72px + 64px + 16px);
+  }
+
+  .sidebar-title {
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--black);
+  }
+
+  .agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .agent-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--black);
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+  .agent-ok   { background: var(--green); }
+  .agent-synth { background: var(--coral); }
+
+  .agent-check {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--black);
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+  }
+  .agent-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .agent-label { font-weight: 600; color: var(--black); font-size: 0.82rem; }
+  .agent-role  { font-size: 0.72rem; color: var(--muted); line-height: 1.3; }
+
+  .agents-sep {
+    height: 1px;
+    background: #e0e0e0;
+    margin: 2px 0;
+  }
+
+  /* ── Área del documento ── */
+  .view-doc-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Cabecera */
+  .doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .doc-title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--black);
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .doc-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn-action {
+    padding: 8px 18px;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    background: var(--white);
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--black);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn-action:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--black); }
+  .btn-action-primary:not(:disabled) {
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 2px 2px 0 var(--coral);
+  }
+  .btn-action-primary:not(:disabled):hover { box-shadow: 3px 3px 0 var(--coral); }
+  .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Card del documento */
+  .doc-body {
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    box-shadow: 4px 4px 0 var(--black);
+    padding: 20px 24px;
+    overflow-x: hidden;
+    word-break: break-word;
+  }
+  .doc-waiting { color: var(--muted); font-style: italic; font-size: 0.875rem; }
+  .doc-error { color: #c00; font-size: 0.875rem; }
+
+  /* ── Estilos de prosa (Markdown renderizado) ── */
+  .prose {
+    color: var(--dark);
+    line-height: 1.75;
+    font-size: 0.95rem;
+    overflow-x: hidden;
+  }
+
+  .prose h1 {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 400;
+    margin: 0 0 16px;
+    line-height: 1.2;
+    border-bottom: 2px solid var(--black);
+    padding-bottom: 10px;
+  }
+  .prose h2 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 400;
+    margin: 36px 0 12px;
+    border-left: 4px solid var(--coral);
+    padding-left: 12px;
+  }
+  .prose h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 24px 0 8px;
+  }
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 18px 0 6px;
+  }
+
+  .prose p { margin: 0 0 14px; }
+
+  .prose ul,
+  .prose ol {
+    margin: 0 0 14px;
+    /* 48px en vez de 24px: los marcadores de listas ordenadas con dos dígitos
+       (ej. "32.") necesitan más espacio que los de un dígito ("1.") para no
+       quedar cortados por el overflow-x: hidden del contenedor. */
+    padding-left: 48px;
+  }
+  .prose li { margin: 4px 0; }
+
+  .prose strong { font-weight: 700; }
+  .prose em     { font-style: italic; }
+
+  .prose hr {
+    border: none;
+    border-top: 2px solid #e0e0e0;
+    margin: 28px 0;
+  }
+
+  .prose blockquote {
+    border-left: 4px solid var(--coral);
+    padding: 8px 16px;
+    margin: 16px 0;
+    background: #fafafa;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .prose blockquote p { margin: 0; }
+
+  /* Código inline */
+  .prose code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: #f3f3f3;
+    border: 1px solid #e0e0e0;
+    padding: 2px 5px;
+    border-radius: 2px;
+    word-break: break-all;
+  }
+
+  /* Bloques de código */
+  .prose pre {
+    background: #1a1a1a;
+    color: #e8e8e8;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    word-break: normal;
+    white-space: pre;
+    max-width: 100%;
+  }
+  .prose pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    word-break: normal;
+    color: inherit;
+  }
+
+  /* Tablas */
+  .prose table {
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.875rem;
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .prose th {
+    background: var(--black);
+    color: var(--white);
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  .prose td {
+    padding: 7px 14px;
+    border-bottom: 1px solid #e5e5e5;
+    vertical-align: top;
+  }
+  .prose tr:nth-child(even) td { background: #fafafa; }
+  .prose tr:last-child td { border-bottom: 2px solid var(--black); }
+
+  /* Diagramas Mermaid */
+  .prose .mermaid {
+    margin: 24px 0;
+    text-align: center;
+    overflow-x: auto;
+    padding: 16px;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    background: #fafafa;
+  }
+  .prose .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Fallback para diagramas Mermaid que no se pueden renderizar.
+     Se muestra el código fuente con el mismo estilo que los bloques de código. */
+  .prose .mermaid-error {
+    background: #1a1a1a;
+    color: #e8e8e8;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    white-space: pre;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+  .prose .mermaid-error code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .view-search-row,
+    .view-main {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+    .view-main { flex-direction: column; }
+    .view-sidebar { width: 100%; position: static; }
+    .doc-title { font-size: 0.9rem; }
+  }
+
+  @media (max-width: 640px) {
+    .doc-body {
+      padding: 20px 20px;
+    }
+    .view-search-row {
+      padding: 0 20px;
+      height: auto;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+  }
+</style>

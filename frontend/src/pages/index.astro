@@ -1,0 +1,635 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="De URL a prompt" navCtaText="Analizar repo" navCtaHref="/analyze">
+
+  <!-- Hero: dos columnas -->
+  <main>
+    <section class="hero">
+      <!-- Columna izquierda: copy + formulario -->
+      <div class="hero-left">
+        <span class="eyebrow-tag"><span class="ini">I</span> <span class="ini">W</span>ant <span class="ini">T</span>o <span class="ini">B</span>uild <span class="ini">I</span>t!</span>
+        <h1>De repo a prompt.<br />Listo para construir.</h1>
+        <p class="hero-desc">
+          Analiza cualquier repo público y genera un documento exhaustivo para
+          reconstruirlo con Claude, Gemini o Codex CLI.
+        </p>
+
+        <form id="analyze-form" class="form-row">
+          <input
+            type="url"
+            id="repo-url"
+            placeholder="github.com/usuario/repo"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit">Analizar &rarr;</button>
+        </form>
+
+        <p class="hint">
+          Magic URL &rarr;&nbsp;cambia <span class="hint-url">github.com</span> por <span class="hint-url">app.example.com</span>
+        </p>
+        <p id="error-msg" class="error hidden"></p>
+      </div>
+
+      <!-- Columna derecha: tarjeta de preview -->
+      <div class="hero-right">
+        <div class="preview-card">
+          <div class="preview-url">github.com/pepe/uber-de-gatos</div>
+          <div class="preview-agents">
+            <div class="preview-agent">
+              <span class="agent-name">Grace Hopper</span>
+              <span class="chip chip-green">completado</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Alan Kay</span>
+              <span class="chip chip-coral">en curso...</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Barbara Liskov</span>
+              <span class="chip chip-coral">en curso...</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Roy Fielding</span>
+              <span class="chip chip-gray">pendiente</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Hedy Lamarr</span>
+              <span class="chip chip-gray">pendiente</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Donald Knuth</span>
+              <span class="chip chip-gray">pendiente</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Lynn Conway</span>
+              <span class="chip chip-gray">pendiente</span>
+            </div>
+            <div class="preview-agent">
+              <span class="agent-name">Tim Berners-Lee</span>
+              <span class="chip chip-gray">pendiente</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="cta-launch-overlay" class="cta-launch-overlay hidden" aria-hidden="true">
+    <svg id="cta-launch-svg" class="cta-launch-svg">
+      <path id="cta-launch-path" class="cta-launch-path"></path>
+    </svg>
+    <div id="cta-launch-cursor" class="cta-launch-cursor"></div>
+  </div>
+
+  <!-- Footer -->
+</Layout>
+
+<script>
+  // Solo se aceptan repositorios públicos de GitHub con URL completa y HTTPS.
+  const GITHUB_PATTERN = /^https:\/\/github\.com\/[\w.\-]+\/[\w.\-]+$/;
+
+  // Cooldown entre envíos: evita que bots simples bombardeen el backend.
+  const COOLDOWN_MS = 10_000;
+  let lastSubmitAt = 0;
+  let cooldownTimer: ReturnType<typeof setInterval> | null = null;
+
+  const form = document.getElementById("analyze-form") as HTMLFormElement;
+  const input = document.getElementById("repo-url") as HTMLInputElement;
+  const submitBtn = form.querySelector("button[type='submit']") as HTMLButtonElement;
+  const errorMsg = document.getElementById("error-msg") as HTMLParagraphElement;
+  const originalBtnText = submitBtn.textContent ?? "Analizar →";
+  const DESKTOP_PLACEHOLDER = "https://github.com/usuario/repo";
+  const MOBILE_PLACEHOLDER = "github.com/usuario/repo";
+  const navCta = document.querySelector(".nav-cta") as HTMLAnchorElement | null;
+  const eyebrowTag = document.querySelector(".eyebrow-tag") as HTMLSpanElement | null;
+  const launchOverlay = document.getElementById("cta-launch-overlay") as HTMLDivElement | null;
+  const launchSvg = document.getElementById("cta-launch-svg") as SVGSVGElement | null;
+  const launchPath = document.getElementById("cta-launch-path") as SVGPathElement | null;
+  const launchCursor = document.getElementById("cta-launch-cursor") as HTMLDivElement | null;
+  let launchBusy = false;
+  let launchRaf = 0;
+
+  /** Muestra un mensaje de error y lo oculta tras `ms` milisegundos si se indica. */
+  function showError(msg: string): void {
+    errorMsg.textContent = msg;
+    errorMsg.classList.remove("hidden");
+  }
+
+  function hideError(): void {
+    errorMsg.classList.add("hidden");
+  }
+
+  function syncInputPlaceholder(): void {
+    input.placeholder = window.matchMedia("(max-width: 640px)").matches
+      ? MOBILE_PLACEHOLDER
+      : DESKTOP_PLACEHOLDER;
+  }
+
+  function highlightSearchInput(): void {
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus({ preventScroll: true });
+    input.classList.remove("input-landed");
+    window.requestAnimationFrame(() => {
+      input.classList.add("input-landed");
+    });
+    window.setTimeout(() => {
+      input.classList.remove("input-landed");
+    }, 1100);
+  }
+
+  function cleanupLaunchAnimation(): void {
+    if (launchRaf) {
+      cancelAnimationFrame(launchRaf);
+      launchRaf = 0;
+    }
+    launchBusy = false;
+    launchOverlay?.classList.add("hidden");
+    launchOverlay?.classList.remove("cta-launch-live");
+    launchCursor?.classList.remove("cta-launch-cursor-live");
+    eyebrowTag?.classList.remove("eyebrow-scribbled");
+    launchPath?.style.removeProperty("stroke-dasharray");
+    launchPath?.style.removeProperty("stroke-dashoffset");
+  }
+
+  function animateNavCtaIntoSearch(): void {
+    if (
+      launchBusy ||
+      !navCta ||
+      !eyebrowTag ||
+      !launchOverlay ||
+      !launchSvg ||
+      !launchPath ||
+      !launchCursor
+    ) {
+      highlightSearchInput();
+      return;
+    }
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) {
+      highlightSearchInput();
+      return;
+    }
+
+    const ctaRect = navCta.getBoundingClientRect();
+    const eyebrowRect = eyebrowTag.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const start = {
+      x: ctaRect.left + ctaRect.width * 0.58,
+      y: ctaRect.top + ctaRect.height * 0.7,
+    };
+    const eyebrowCenter = {
+      x: eyebrowRect.left + eyebrowRect.width / 2,
+      y: eyebrowRect.top + eyebrowRect.height / 2,
+    };
+    const end = {
+      x: inputRect.left + Math.min(44, inputRect.width * 0.16),
+      y: inputRect.top + inputRect.height * 0.52,
+    };
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const eyebrowEntry = {
+      x: eyebrowRect.right + 12,
+      y: eyebrowRect.top + eyebrowRect.height * 0.36,
+    };
+    const eyebrowExit = {
+      x: eyebrowRect.right + 10,
+      y: eyebrowRect.top + eyebrowRect.height * 0.7,
+    };
+    const loopRx = eyebrowRect.width / 2 + 18;
+    const loopRy = eyebrowRect.height / 2 + 16;
+    const cp1 = {
+      x: start.x + Math.max(-142, dx * 0.065),
+      y: start.y + Math.max(26, dy * 0.16),
+    };
+    const cp2 = {
+      x: eyebrowEntry.x + Math.max(44, Math.abs(eyebrowEntry.x - start.x) * 0.1),
+      y: eyebrowEntry.y - Math.max(22, Math.abs(eyebrowEntry.y - start.y) * 0.24),
+    };
+    const finalCp1 = {
+      x: eyebrowExit.x + Math.max(66, Math.abs(end.x - eyebrowExit.x) * 0.18),
+      y: eyebrowExit.y + Math.max(24, Math.abs(end.y - eyebrowExit.y) * 0.08),
+    };
+    const finalCp2 = {
+      x: end.x + Math.max(96, Math.abs(dx) * 0.22),
+      y: end.y - Math.max(62, Math.abs(dy) * 0.37),
+    };
+
+    launchBusy = true;
+    launchOverlay.classList.remove("hidden");
+    launchOverlay.classList.add("cta-launch-live");
+    launchCursor.classList.add("cta-launch-cursor-live");
+    eyebrowTag.classList.add("eyebrow-scribbled");
+
+    launchSvg.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    launchSvg.setAttribute("width", `${window.innerWidth}`);
+    launchSvg.setAttribute("height", `${window.innerHeight}`);
+
+    const d = [
+      `M ${start.x} ${start.y}`,
+      `C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${eyebrowEntry.x} ${eyebrowEntry.y}`,
+      `C ${eyebrowCenter.x + loopRx * 0.38} ${eyebrowCenter.y - loopRy * 1.08}, ${eyebrowCenter.x - loopRx * 0.86} ${eyebrowCenter.y - loopRy * 1.02}, ${eyebrowCenter.x - loopRx} ${eyebrowCenter.y - loopRy * 0.08}`,
+      `C ${eyebrowCenter.x - loopRx * 1.02} ${eyebrowCenter.y + loopRy * 0.96}, ${eyebrowCenter.x + loopRx * 0.74} ${eyebrowCenter.y + loopRy * 1.1}, ${eyebrowCenter.x + loopRx * 0.9} ${eyebrowCenter.y + loopRy * 0.08}`,
+      `C ${eyebrowCenter.x + loopRx * 0.48} ${eyebrowCenter.y - loopRy * 0.26}, ${eyebrowCenter.x - loopRx * 0.18} ${eyebrowCenter.y + loopRy * 0.36}, ${eyebrowExit.x} ${eyebrowExit.y}`,
+      `C ${finalCp1.x} ${finalCp1.y}, ${finalCp2.x} ${finalCp2.y}, ${end.x} ${end.y}`,
+    ].join(" ");
+    launchPath.setAttribute("d", d);
+    const totalLength = launchPath.getTotalLength();
+    launchPath.style.strokeDasharray = `${totalLength}`;
+    launchPath.style.strokeDashoffset = `${totalLength}`;
+
+    const duration = 1120;
+    const startAt = performance.now();
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 2.65);
+    const easeInOut = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
+
+    const frame = (now: number) => {
+      const elapsed = now - startAt;
+      const progress = Math.min(elapsed / duration, 1);
+      const pathProgress = easeInOut(progress);
+      const distance = totalLength * pathProgress;
+      const point = launchPath.getPointAtLength(distance);
+      const nextPoint = launchPath.getPointAtLength(
+        Math.min(totalLength, distance + 2),
+      );
+      const angle =
+        Math.atan2(nextPoint.y - point.y, nextPoint.x - point.x) * (180 / Math.PI) + 90;
+      const scale = 0.92 + easeOut(progress) * 0.18;
+      const sway = Math.sin(progress * Math.PI * 1.35) * 5.2;
+
+      launchPath.style.strokeDashoffset = `${totalLength * (1 - easeOut(progress))}`;
+      launchCursor.style.left = `${point.x}px`;
+      launchCursor.style.top = `${point.y}px`;
+      launchCursor.style.transform = `translate(-15px, -7px) rotate(${angle + sway}deg) scale(${scale})`;
+
+      if (progress < 1) {
+        launchRaf = requestAnimationFrame(frame);
+        return;
+      }
+
+      highlightSearchInput();
+      window.setTimeout(cleanupLaunchAnimation, 190);
+    };
+
+    launchRaf = requestAnimationFrame(frame);
+  }
+
+  /** Deshabilita el botón y muestra cuenta atrás hasta que expire el cooldown. */
+  function startCooldown(): void {
+    submitBtn.disabled = true;
+    const deadline = lastSubmitAt + COOLDOWN_MS;
+
+    cooldownTimer = setInterval(() => {
+      const remaining = Math.ceil((deadline - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(cooldownTimer!);
+        cooldownTimer = null;
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
+      } else {
+        submitBtn.textContent = `Espera ${remaining}s`;
+      }
+    }, 200);
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = input.value.trim().replace(/\/$/, "");
+
+    // Bloqueo por cooldown: rechazado sin consumir intento de análisis
+    const now = Date.now();
+    if (now - lastSubmitAt < COOLDOWN_MS) {
+      showError("Demasiadas solicitudes. Espera unos segundos antes de volver a intentarlo.");
+      return;
+    }
+
+    // Validación estricta: solo GitHub HTTPS
+    if (!GITHUB_PATTERN.test(raw)) {
+      showError("Solo se admiten repositorios públicos de GitHub. Usa el formato: https://github.com/usuario/repo");
+      return;
+    }
+
+    hideError();
+    lastSubmitAt = now;
+    startCooldown();
+    window.location.href = `/analyze?url=${encodeURIComponent(raw)}`;
+  });
+
+  navCta?.addEventListener("click", (e) => {
+    if (window.location.pathname !== "/" || navCta.getAttribute("href") !== "/analyze") {
+      return;
+    }
+    e.preventDefault();
+    animateNavCtaIntoSearch();
+  });
+
+  syncInputPlaceholder();
+  window.addEventListener("resize", syncInputPlaceholder);
+</script>
+
+<style>
+  :root {
+    --asset-rev-index: 202604051500;
+  }
+
+  /* ── Hero ── */
+  main {
+    min-height: calc(100vh - 72px - 56px);
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 64px 48px;
+    width: 100%;
+  }
+  @media (max-width: 640px) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 32px;
+      padding: 20px 20px;
+    }
+    h1 {
+      font-size: 2.25rem;
+      line-height: 1.02;
+    }
+    .eyebrow-tag {
+      font-size: 1.3rem;
+    }
+    .form-row {
+      flex-direction: column;
+      gap: 12px;
+      align-items: stretch;
+      width: 100%;
+      max-width: 100%;
+    }
+    .form-row input {
+      border-right: var(--border);
+      max-width: 100%;
+      padding: 13px 14px;
+      font-size: 16px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .form-row input::placeholder {
+      font-size: 0.82rem;
+    }
+    .form-row button {
+      width: 100%;
+    }
+    .preview-agent {
+      gap: 12px;
+    }
+    .agent-name {
+      min-width: 0;
+      flex: 1;
+    }
+    .preview-url {
+      overflow-wrap: anywhere;
+    }
+  }
+  .hero > * {
+    min-width: 0;
+  }
+  .hero-left {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+  .eyebrow-tag {
+    display: inline-block;
+    align-self: flex-start;
+    background: var(--black);
+    border: var(--border);
+    box-shadow: 4px 4px 0 var(--coral);
+    padding: 5px 12px;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1;
+    transform-origin: 24% 50%;
+    transition:
+      transform 0.22s ease,
+      box-shadow 0.22s ease;
+  }
+  .eyebrow-tag.eyebrow-scribbled {
+    transform: rotate(-1.8deg) translateY(-1px);
+    box-shadow: 7px 7px 0 var(--coral);
+  }
+  .eyebrow-tag .ini {
+    color: var(--coral);
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 3.5rem;
+    line-height: 1.05;
+    color: var(--black);
+  }
+  .hero-desc {
+    font-size: 1rem;
+    color: var(--mid);
+    line-height: 1.6;
+    max-width: 480px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Formulario ── */
+  .form-row {
+    display: flex;
+    gap: 0;
+    margin-top: 8px;
+    width: 100%;
+    max-width: 100%;
+  }
+  .form-row input {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 14px 16px;
+    border: var(--border);
+    border-right: none;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    background: var(--white);
+    outline: none;
+    color: var(--dark);
+  }
+  .form-row input::placeholder {
+    color: var(--muted);
+  }
+  .form-row input:focus {
+    background: var(--bg-accent);
+  }
+  .form-row input.input-landed {
+    background: #fff6ef;
+    box-shadow:
+      0 0 0 3px rgba(255, 111, 60, 0.16),
+      12px 12px 0 rgba(255, 111, 60, 0.18);
+    transform: translateY(-1px);
+    transition:
+      box-shadow 0.28s ease,
+      background 0.28s ease,
+      transform 0.28s ease;
+  }
+  .form-row button {
+    min-width: 0;
+    padding: 14px 24px;
+    background: var(--black);
+    color: var(--white);
+    border: var(--border);
+    font-size: 0.875rem;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background 0.1s;
+  }
+  .form-row button:hover {
+    background: var(--dark);
+  }
+  .hint {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .hint-url {
+    font-family: var(--font-mono);
+    color: var(--dark);
+  }
+  .error {
+    color: #c00;
+    font-size: 0.85rem;
+  }
+  .hidden {
+    display: none;
+  }
+
+  .cta-launch-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 45;
+  }
+  .cta-launch-svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .cta-launch-path {
+    fill: none;
+    stroke: var(--coral);
+    stroke-width: 3.5px;
+    stroke-linecap: round;
+    stroke-dasharray: 7 12;
+    opacity: 0.8;
+    filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.12));
+  }
+  .cta-launch-overlay.cta-launch-live .cta-launch-path {
+    animation: cta-path-pulse 0.86s ease-out;
+  }
+  .cta-launch-cursor {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 46px;
+    height: 54px;
+    opacity: 0;
+    transform-origin: 15px 9px;
+    filter: drop-shadow(6px 6px 0 rgba(255, 111, 60, 0.26));
+  }
+  .cta-launch-cursor::before,
+  .cta-launch-cursor::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    clip-path: polygon(0 0, 92% 40%, 57% 49%, 80% 100%, 57% 100%, 33% 58%, 0 80%);
+  }
+  .cta-launch-cursor::before {
+    background: var(--black);
+  }
+  .cta-launch-cursor::after {
+    inset: 4px;
+    background: var(--white);
+  }
+  .cta-launch-cursor-live {
+    opacity: 1;
+  }
+  @keyframes cta-path-pulse {
+    0% {
+      opacity: 0.08;
+      stroke-width: 2px;
+    }
+    35% {
+      opacity: 0.88;
+      stroke-width: 4.5px;
+    }
+    100% {
+      opacity: 0.8;
+      stroke-width: 3.5px;
+    }
+  }
+
+  /* ── Tarjeta preview ── */
+  .hero-right {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .preview-card {
+    border: var(--border);
+    box-shadow: var(--shadow);
+    background: var(--white);
+    width: 100%;
+    max-width: 400px;
+  }
+  .preview-url {
+    padding: 10px 16px;
+    border-bottom: var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    background: var(--bg-accent);
+    color: var(--dark);
+  }
+  .preview-agents {
+    padding: 4px 0;
+  }
+  .preview-agent {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--light);
+    font-size: 0.85rem;
+  }
+  .preview-agent:last-child {
+    border-bottom: none;
+  }
+  .agent-name {
+    color: var(--dark);
+    min-width: 0;
+  }
+  .chip {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+    border: var(--border);
+    font-family: var(--font-mono);
+  }
+  .chip-green {
+    background: var(--green);
+  }
+  .chip-coral {
+    background: var(--coral);
+  }
+  .chip-gray {
+    background: var(--light);
+    color: var(--muted);
+    border-color: var(--light);
+  }
+
+</style>

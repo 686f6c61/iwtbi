@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+*.egg
+
+# Node
+node_modules/
+.npm/
+
+# Astro
+frontend/dist/
+frontend/.astro/
+
+# Entorno
+.env
+**/.env
+**/.env.local
+**/.env.*.local
+!.env.example
+!**/.env.example
+!**/.env.sample
+
+# macOS
+.DS_Store
+
+# Docker
+*.log
+*.log.*
+*.pid
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+backend/supabase/*
+!backend/supabase/schema.sql
+
+# Claude Code / plugins
+.claude/
+.playwright-mcp/
+.scannerwork/
+test-results/
+.venv-codex/
+.venv-codex314/

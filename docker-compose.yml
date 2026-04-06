@@ -1,0 +1,19 @@
+# docker-compose.yml
+# Orquesta frontend Astro (nginx) y backend FastAPI.
+# Puertos 3410/8410 para evitar conflictos con otros proyectos Docker activos.
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "${IWTBI_FRONTEND_PORT:-3410}:8080"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "${IWTBI_BACKEND_PORT:-8410}:8000"
+    env_file:
+      - .env
+    volumes:
+      - /tmp/iwtbi:/tmp/iwtbi
