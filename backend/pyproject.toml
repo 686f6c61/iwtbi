@@ -6,6 +6,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "langchain",
+    "langchain-anthropic",
     "langchain-openai",
     "langchain-ollama",
     "ollama",

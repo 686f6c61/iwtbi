@@ -65,6 +65,14 @@ def isolate_analyze_route_side_effects():
         yield
 
 
+@pytest.fixture(autouse=True)
+def configure_test_llm(monkeypatch):
+    """Usa una configuración LLM sintácticamente válida para tests de rutas."""
+    monkeypatch.setattr(settings, "provider", "zai")
+    monkeypatch.setattr(settings, "zai_api_key", "test-key")
+    monkeypatch.setattr(settings, "zai_base_url", "https://api.z.ai/api/paas/v4/")
+
+
 def test_health_endpoint(client: TestClient):
     """El endpoint de salud debe responder 200 con status ok."""
     response = client.get("/health")

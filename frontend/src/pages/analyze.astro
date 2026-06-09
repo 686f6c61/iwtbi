@@ -51,6 +51,58 @@ const AGENTS = [
           </span>
         </div>
 
+        <div class="llm-panel">
+          <div class="field-group">
+            <label for="llm-provider" class="field-label">Proveedor LLM</label>
+            <select id="llm-provider" class="field-input">
+              <option value="openrouter">OpenRouter</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="ollama_local">Ollama local</option>
+              <option value="ollama_cloud">Ollama Cloud</option>
+              <option value="zai">Z.AI</option>
+            </select>
+          </div>
+
+          <div class="llm-grid">
+            <div class="field-group">
+              <label for="llm-model" class="field-label">Modelo</label>
+              <input
+                type="text"
+                id="llm-model"
+                class="field-input"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div id="llm-base-url-group" class="field-group">
+              <label for="llm-base-url" class="field-label">Base URL</label>
+              <input
+                type="url"
+                id="llm-base-url"
+                class="field-input"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+          </div>
+
+          <div id="llm-api-key-group" class="field-group">
+            <label for="llm-api-key" class="field-label">API key</label>
+            <input
+              type="password"
+              id="llm-api-key"
+              class="field-input"
+              placeholder="sk-..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span id="llm-help" class="field-help">
+              La clave se usa solo para este análisis y no se guarda en la biblioteca.
+            </span>
+          </div>
+        </div>
+
         <!-- Toggle de privacidad -->
         <div class="toggle-row">
           <div class="toggle-info">
@@ -206,6 +258,8 @@ const AGENTS = [
   } from "../scripts/stream-client";
   import type {
     CachedAnalysisData,
+    LlmConfigPayload,
+    LlmProvider,
     RepoPreflightData,
   } from "../scripts/stream-client";
 
@@ -234,6 +288,13 @@ const AGENTS = [
   // ── Popup lógica ─────────────────────────────────────────────────────────
   const overlay      = document.getElementById("popup-overlay")!;
   const emailInput   = document.getElementById("popup-email") as HTMLInputElement;
+  const llmProviderInput = document.getElementById("llm-provider") as HTMLSelectElement;
+  const llmModelInput = document.getElementById("llm-model") as HTMLInputElement;
+  const llmBaseUrlInput = document.getElementById("llm-base-url") as HTMLInputElement;
+  const llmApiKeyInput = document.getElementById("llm-api-key") as HTMLInputElement;
+  const llmApiKeyGroup = document.getElementById("llm-api-key-group")!;
+  const llmBaseUrlGroup = document.getElementById("llm-base-url-group")!;
+  const llmHelp = document.getElementById("llm-help")!;
   const emailLabel   = document.getElementById("email-label")!;
   const emailHelp    = document.getElementById("email-help")!;
   const toggleBtn    = document.getElementById("privacy-toggle") as HTMLButtonElement;
@@ -298,6 +359,125 @@ const AGENTS = [
   let emailNotificationsEnabled = false;
   let analysisPendingOrRunning = false;
   let canLeaveWithoutRisk = true;
+  const LLM_STORAGE_KEY = "iwtbi_llm_config_v1";
+
+  const LLM_DEFAULTS: Record<LlmProvider, {
+    model: string;
+    baseUrl: string;
+    needsApiKey: boolean;
+    showBaseUrl: boolean;
+    help: string;
+  }> = {
+    openrouter: {
+      model: "openai/gpt-5-mini",
+      baseUrl: "https://openrouter.ai/api/v1",
+      needsApiKey: true,
+      showBaseUrl: true,
+      help: "Usa una OpenRouter API key. Se recordará en este navegador.",
+    },
+    openai: {
+      model: "gpt-5-mini",
+      baseUrl: "",
+      needsApiKey: true,
+      showBaseUrl: false,
+      help: "Usa una OpenAI API key. Se recordará en este navegador.",
+    },
+    anthropic: {
+      model: "claude-sonnet-4-5",
+      baseUrl: "",
+      needsApiKey: true,
+      showBaseUrl: false,
+      help: "Usa una Anthropic API key. Se recordará en este navegador.",
+    },
+    ollama_local: {
+      model: "llama3.1",
+      baseUrl: "http://host.docker.internal:11434",
+      needsApiKey: false,
+      showBaseUrl: true,
+      help: "No necesita API key. En Docker para macOS usa host.docker.internal.",
+    },
+    ollama_cloud: {
+      model: "qwen3.5",
+      baseUrl: "https://ollama.com",
+      needsApiKey: true,
+      showBaseUrl: true,
+      help: "Usa una Ollama Cloud API key. Se recordará en este navegador.",
+    },
+    zai: {
+      model: "glm-z1-flash",
+      baseUrl: "https://api.z.ai/api/paas/v4/",
+      needsApiKey: true,
+      showBaseUrl: true,
+      help: "Usa una Z.AI API key. Se recordará en este navegador.",
+    },
+  };
+
+  function selectedLlmProvider(): LlmProvider {
+    return llmProviderInput.value as LlmProvider;
+  }
+
+  function loadStoredLlmConfig() {
+    try {
+      const raw = localStorage.getItem(LLM_STORAGE_KEY);
+      if (!raw) return;
+      const stored = JSON.parse(raw) as Partial<LlmConfigPayload>;
+      if (!stored.provider || !(stored.provider in LLM_DEFAULTS)) return;
+
+      llmProviderInput.value = stored.provider;
+      syncLlmControls(true);
+      llmModelInput.value = stored.model || LLM_DEFAULTS[stored.provider].model;
+      llmBaseUrlInput.value =
+        stored.base_url || LLM_DEFAULTS[stored.provider].baseUrl;
+      llmApiKeyInput.value = stored.api_key || "";
+    } catch {
+      localStorage.removeItem(LLM_STORAGE_KEY);
+    }
+  }
+
+  function saveStoredLlmConfig(config: LlmConfigPayload) {
+    localStorage.setItem(LLM_STORAGE_KEY, JSON.stringify(config));
+  }
+
+  function syncLlmControls(resetModel = false) {
+    const provider = selectedLlmProvider();
+    const defaults = LLM_DEFAULTS[provider];
+    if (resetModel || !llmModelInput.value.trim()) {
+      llmModelInput.value = defaults.model;
+    }
+    if (resetModel || !llmBaseUrlInput.value.trim()) {
+      llmBaseUrlInput.value = defaults.baseUrl;
+    }
+    llmApiKeyGroup.classList.toggle("field-hidden", !defaults.needsApiKey);
+    llmBaseUrlGroup.classList.toggle("field-hidden", !defaults.showBaseUrl);
+    llmApiKeyInput.required = defaults.needsApiKey;
+    llmApiKeyInput.placeholder = defaults.needsApiKey ? "sk-..." : "No necesaria";
+    llmHelp.textContent = defaults.help;
+  }
+
+  function readLlmConfig(): LlmConfigPayload | null {
+    const provider = selectedLlmProvider();
+    const defaults = LLM_DEFAULTS[provider];
+    const model = llmModelInput.value.trim();
+    const apiKey = llmApiKeyInput.value.trim();
+    const baseUrl = llmBaseUrlInput.value.trim();
+
+    if (!model) {
+      llmModelInput.focus();
+      return null;
+    }
+
+    if (defaults.needsApiKey && !apiKey) {
+      llmApiKeyInput.focus();
+      return null;
+    }
+
+    return {
+      provider,
+      model,
+      api_key: defaults.needsApiKey ? apiKey : null,
+      base_url: defaults.showBaseUrl ? baseUrl || null : null,
+    };
+  }
 
   function hideMeasureBox() {
     measureBox.classList.add("measure-hidden");
@@ -593,6 +773,10 @@ const AGENTS = [
   }
 
   emailInput.addEventListener("input", updateInfoBox);
+  llmProviderInput.addEventListener("change", () => {
+    syncLlmControls(true);
+    llmApiKeyInput.value = "";
+  });
 
   toggleBtn.addEventListener("click", () => {
     if (!emailNotificationsEnabled) {
@@ -646,6 +830,14 @@ const AGENTS = [
       return;
     }
 
+    const llmConfig = readLlmConfig();
+    if (!llmConfig) {
+      infoBox.className = "info-box info-red";
+      infoText.textContent = "Completa la configuración del proveedor LLM antes de iniciar el análisis.";
+      return;
+    }
+    saveStoredLlmConfig(llmConfig);
+
     startBtn.setAttribute("disabled", "true");
     startBtn.textContent = "Midiendo...";
     showMeasuringState();
@@ -655,7 +847,11 @@ const AGENTS = [
 
     collectedEmail =
       emailNotificationsEnabled && privacyAccepted ? email : "";
-    const result = await runAnalysis(collectedEmail || undefined, forceNewRequested);
+    const result = await runAnalysis(
+      collectedEmail || undefined,
+      forceNewRequested,
+      llmConfig,
+    );
     if (!result.accepted) {
       setLeaveProtection(false, true);
       startBtn.removeAttribute("disabled");
@@ -907,7 +1103,10 @@ const AGENTS = [
     forceBtn.addEventListener("click", () => {
       banner.classList.add("cache-banner-hidden");
       if (repoUrl) {
-        void runAnalysis(undefined, true);
+        const llmConfig = readLlmConfig();
+        if (llmConfig) {
+          void runAnalysis(undefined, true, llmConfig);
+        }
       }
     });
   }
@@ -936,7 +1135,11 @@ const AGENTS = [
     });
   }
 
-  async function runAnalysis(email?: string, forceNew = false) {
+  async function runAnalysis(
+    email?: string,
+    forceNew = false,
+    llmConfig?: LlmConfigPayload,
+  ) {
     if (!repoUrl) {
       return { accepted: false, cached: false };
     }
@@ -1001,7 +1204,7 @@ const AGENTS = [
             agents.forEach((id) => setAgentStatus(id, "completado"));
           },
         },
-        { forceNew, email, ticket },
+        { forceNew, email, ticket, llm: llmConfig },
       );
       if (!result.accepted) {
         setLeaveProtection(false, true);
@@ -1045,6 +1248,8 @@ const AGENTS = [
   emailInput.disabled = true;
   toggleBtn.disabled = true;
   toggleBtn.classList.add("toggle-disabled");
+  syncLlmControls(true);
+  loadStoredLlmConfig();
   updateInfoBox();
 
   void getBackendCapabilities()
@@ -1097,7 +1302,7 @@ const AGENTS = [
     border: 2px solid var(--black);
     box-shadow: 6px 6px 0 var(--coral);
     width: 100%;
-    max-width: 480px;
+    max-width: 560px;
     max-height: min(92svh, 760px);
     padding: 0;
     margin: 16px;
@@ -1143,6 +1348,7 @@ const AGENTS = [
 
   /* Campo de email */
   .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-hidden { display: none !important; }
   .field-label { font-size: 0.8rem; font-weight: 600; color: var(--dark); }
   .field-help {
     font-size: 0.72rem;
@@ -1163,6 +1369,22 @@ const AGENTS = [
     background: #f3f3f3;
     color: #777;
     cursor: not-allowed;
+  }
+
+  .llm-panel {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fafafa;
+  }
+
+  .llm-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
 
   /* Toggle de privacidad */
@@ -1758,6 +1980,9 @@ const AGENTS = [
   }
 
   @media (max-width: 900px) {
+    .llm-grid {
+      grid-template-columns: 1fr;
+    }
     .measure-limit-panel {
       grid-template-columns: 1fr;
     }

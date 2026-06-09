@@ -46,7 +46,6 @@ class RepoPreflightService:
     Calcula si un repo entra en el modo normal, optimizado o demasiado grande.
     """
 
-    _TOO_LARGE_CONTEXT_MULTIPLIER = 24
     _SPARSE_CONTEXT_FILE_FLOOR = 8
     _SPARSE_HUGE_FILE_FLOOR = 12
     _SPARSE_HUGE_CONTEXT_MULTIPLIER = 18
@@ -102,7 +101,10 @@ class RepoPreflightService:
         if estimate.candidate_files == 0 or estimate.total_candidate_chars == 0:
             return "normal", "fits_context"
 
-        if estimate.candidate_files > settings.preflight_max_candidate_files:
+        if (
+            settings.preflight_max_candidate_files > 0
+            and estimate.candidate_files > settings.preflight_max_candidate_files
+        ):
             return "too_large", "file_count_limit"
 
         if estimate.total_candidate_chars <= settings.max_context_chars:
@@ -110,8 +112,6 @@ class RepoPreflightService:
 
         if (
             estimate.selected_files < self._SPARSE_CONTEXT_FILE_FLOOR
-            or estimate.total_candidate_chars
-            > settings.max_context_chars * self._TOO_LARGE_CONTEXT_MULTIPLIER
             or (
                 estimate.selected_files < self._SPARSE_HUGE_FILE_FLOOR
                 and estimate.total_candidate_chars

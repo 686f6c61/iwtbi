@@ -23,6 +23,7 @@ from app.agents.stack import StackAgent
 from app.agents.synthesizer import Synthesizer
 from app.database.analyses_repo import AnalysesRepo
 from app.models.job import JobStatus
+from app.models.job import LlmConfig
 from app.models.repo_context import RepoContext
 from app.config import settings
 from app.services.file_reader import FileReader
@@ -60,14 +61,16 @@ class Orchestrator:
             max_context_chars=settings.max_context_chars,
         )
         self._synthesizer = Synthesizer()
-        self._agents: list[BaseAgent] = [
-            StackAgent(),
-            ArchitectureAgent(),
-            DatabaseAgent(),
-            ApiAgent(),
-            FrontendAgent(),
-            LogicAgent(),
-            DevOpsAgent(),
+
+    def _build_agents(self, llm_config: LlmConfig | None) -> list[BaseAgent]:
+        return [
+            StackAgent(llm_config),
+            ArchitectureAgent(llm_config),
+            DatabaseAgent(llm_config),
+            ApiAgent(llm_config),
+            FrontendAgent(llm_config),
+            LogicAgent(llm_config),
+            DevOpsAgent(llm_config),
         ]
 
     async def run(self, job_id: str) -> None:
@@ -111,6 +114,7 @@ class Orchestrator:
             self._store.update_status(job_id, JobStatus.ANALYZING)
             await self._emit(job_id, "status", {"status": "analyzing"})
 
+            self._agents = self._build_agents(job.llm_config)
             sections = await self._run_agents(job_id, context)
 
             # Fase 4: Sintetizar el documento final
@@ -118,8 +122,13 @@ class Orchestrator:
             await self._emit(job_id, "status", {"status": "synthesizing"})
 
             repo_full_name = "/".join(job.repo_url.rstrip("/").split("/")[-2:])
+            synthesizer = (
+                Synthesizer(job.llm_config)
+                if job.llm_config
+                else self._synthesizer
+            )
             try:
-                document = await self._synthesizer.synthesize(sections)
+                document = await synthesizer.synthesize(sections)
             except Exception as synth_exc:
                 _logger.warning(
                     "La síntesis final falló para el job '%s' (repo: %s). "
@@ -131,7 +140,7 @@ class Orchestrator:
                     exc_info=True,
                 )
                 try:
-                    document = await self._synthesizer.synthesize_rescue(
+                    document = await synthesizer.synthesize_rescue(
                         repo_url=job.repo_url,
                         sections=sections,
                     )
@@ -144,7 +153,7 @@ class Orchestrator:
                         rescue_exc,
                         exc_info=True,
                     )
-                    document = self._synthesizer.synthesize_deterministic(
+                    document = synthesizer.synthesize_deterministic(
                         repo_url=job.repo_url,
                         sections=sections,
                     )

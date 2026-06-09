@@ -2,6 +2,7 @@
 
 from app.services.file_reader import ContextEstimate
 from app.services.repo_preflight import RepoPreflightService
+from app.config import settings
 
 
 def test_preflight_marks_small_context_as_normal():
@@ -40,7 +41,8 @@ def test_preflight_marks_medium_over_budget_context_as_optimized():
     assert reason == "prioritized_context"
 
 
-def test_preflight_marks_repo_over_750_candidate_files_as_too_large():
+def test_preflight_marks_repo_over_750_candidate_files_as_too_large(monkeypatch):
+    monkeypatch.setattr(settings, "preflight_max_candidate_files", 750)
     service = RepoPreflightService()
 
     mode, reason = service._decide_mode(
@@ -56,6 +58,25 @@ def test_preflight_marks_repo_over_750_candidate_files_as_too_large():
 
     assert mode == "too_large"
     assert reason == "file_count_limit"
+
+
+def test_preflight_ignores_candidate_file_limit_when_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "preflight_max_candidate_files", 0)
+    service = RepoPreflightService()
+
+    mode, reason = service._decide_mode(
+        ContextEstimate(
+            candidate_files=751,
+            selected_files=32,
+            total_candidate_chars=640_000,
+            selected_chars=80_000,
+            oversized_files=0,
+            budget_truncated_files=1,
+        )
+    )
+
+    assert mode == "optimized"
+    assert reason == "prioritized_context"
 
 
 def test_preflight_marks_sparse_context_as_too_large():
@@ -86,6 +107,25 @@ def test_preflight_marks_huge_but_still_coverable_context_as_optimized():
             total_candidate_chars=1_245_372,
             selected_chars=80_000,
             oversized_files=2,
+            budget_truncated_files=1,
+        )
+    )
+
+    assert mode == "optimized"
+    assert reason == "prioritized_context"
+
+
+def test_preflight_marks_very_huge_coverable_context_as_optimized(monkeypatch):
+    monkeypatch.setattr(settings, "preflight_max_candidate_files", 0)
+    service = RepoPreflightService()
+
+    mode, reason = service._decide_mode(
+        ContextEstimate(
+            candidate_files=1591,
+            selected_files=35,
+            total_candidate_chars=3_500_000,
+            selected_chars=80_000,
+            oversized_files=4,
             budget_truncated_files=1,
         )
     )

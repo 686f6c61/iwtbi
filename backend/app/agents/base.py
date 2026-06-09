@@ -24,11 +24,13 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import Union
 
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from app.config import settings
+from app.models.job import LlmConfig, LlmProvider
 from app.models.repo_context import RepoContext
 
 
@@ -58,6 +60,11 @@ escribe "No detectado en el código analizado" — no inventes alternativas ni v
 un hecho observado directamente en el código fuente."""
 
 _llm_semaphore: asyncio.Semaphore | None = None
+_ZAI_OFFICIAL_BASE_URL = "https://api.z.ai/api/paas/v4/"
+_LEGACY_ZAI_BASE_URLS = {"https://api.z.ai/v1", "https://api.z.ai/v1/"}
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+_OLLAMA_CLOUD_BASE_URL = "https://ollama.com"
+_OLLAMA_LOCAL_BASE_URL = "http://host.docker.internal:11434"
 
 
 def _get_llm_semaphore() -> asyncio.Semaphore:
@@ -66,6 +73,94 @@ def _get_llm_semaphore() -> asyncio.Semaphore:
     if _llm_semaphore is None:
         _llm_semaphore = asyncio.Semaphore(settings.llm_max_concurrency)
     return _llm_semaphore
+
+
+def _has_real_secret(value: str) -> bool:
+    """Detecta placeholders habituales para evitar llamadas LLM inútiles."""
+    stripped = value.strip()
+    return bool(stripped) and stripped != "placeholder" and not stripped.startswith("your_")
+
+
+def _setting_provider() -> LlmProvider:
+    return settings.provider
+
+
+def _effective_provider(llm_config: LlmConfig | None) -> LlmProvider:
+    return llm_config.provider if llm_config else _setting_provider()
+
+
+def _effective_model(llm_config: LlmConfig | None) -> str:
+    if llm_config:
+        return llm_config.model.strip()
+    if settings.provider == "zai":
+        return settings.zai_model
+    return settings.ollama_cloud_model
+
+
+def _effective_api_key(llm_config: LlmConfig | None, provider: LlmProvider) -> str:
+    if llm_config:
+        return (llm_config.api_key or "").strip()
+    if provider == "zai":
+        return settings.zai_api_key
+    if provider == "ollama_cloud":
+        return settings.ollama_cloud_api_key
+    return ""
+
+
+def _effective_base_url(llm_config: LlmConfig | None, provider: LlmProvider) -> str | None:
+    configured = (llm_config.base_url or "").strip() if llm_config else ""
+    if configured:
+        return configured
+    if not llm_config and provider == "zai":
+        return settings.zai_base_url
+    if not llm_config and provider == "ollama_cloud":
+        return settings.ollama_cloud_base_url
+    if provider == "openrouter":
+        return _OPENROUTER_BASE_URL
+    if provider == "zai":
+        return _ZAI_OFFICIAL_BASE_URL
+    if provider == "ollama_cloud":
+        return _OLLAMA_CLOUD_BASE_URL
+    if provider == "ollama_local":
+        return _OLLAMA_LOCAL_BASE_URL
+    return None
+
+
+def validate_llm_settings(llm_config: LlmConfig | None = None) -> None:
+    """
+    Valida la configuración LLM antes de arrancar un análisis costoso.
+
+    Raises:
+        ValueError: Si falta la credencial del proveedor activo o si Z.AI
+                    apunta al endpoint OpenAI-compatible antiguo.
+    """
+    provider = _effective_provider(llm_config)
+    model = _effective_model(llm_config)
+    api_key = _effective_api_key(llm_config, provider)
+    base_url = _effective_base_url(llm_config, provider)
+
+    if not model:
+        raise ValueError("Falta configurar el modelo LLM para el análisis.")
+
+    if provider in {"zai", "openai", "openrouter", "anthropic", "ollama_cloud"}:
+        if not _has_real_secret(api_key):
+            raise ValueError(
+                f"Falta configurar una API key real para el proveedor {provider}."
+            )
+
+    if provider == "zai":
+        if (base_url or "").strip().rstrip("/") in {
+            url.rstrip("/") for url in _LEGACY_ZAI_BASE_URLS
+        }:
+            raise ValueError(
+                "ZAI_BASE_URL apunta al endpoint antiguo. Usa "
+                f"{_ZAI_OFFICIAL_BASE_URL}"
+            )
+
+    if provider in {"zai", "openrouter", "ollama_cloud", "ollama_local"}:
+        if not base_url:
+            raise ValueError(f"Falta configurar la URL base para el proveedor {provider}.")
+        return
 
 
 def _is_retryable_llm_error(exc: Exception) -> bool:
@@ -133,7 +228,8 @@ def build_llm(
     temperature: float = 0.0,
     max_tokens: int = 32768,
     request_timeout_seconds: float | None = None,
-) -> Union[ChatOpenAI, ChatOllama]:
+    llm_config: LlmConfig | None = None,
+) -> Union[ChatOpenAI, ChatOllama, ChatAnthropic]:
     """
     Construye el cliente LLM según el proveedor configurado en settings.
 
@@ -155,36 +251,47 @@ def build_llm(
     Raises:
         ValueError: Si el proveedor configurado no es reconocido.
     """
-    if settings.provider == "zai":
-        timeout_seconds = (
-            request_timeout_seconds
-            if request_timeout_seconds is not None
-            else settings.llm_request_timeout_seconds
-        )
-        return ChatOpenAI(
-            api_key=settings.zai_api_key,
-            base_url=settings.zai_base_url,
-            model=settings.zai_model,
+    provider = _effective_provider(llm_config)
+    model = _effective_model(llm_config)
+    api_key = _effective_api_key(llm_config, provider)
+    base_url = _effective_base_url(llm_config, provider)
+    timeout_seconds = (
+        request_timeout_seconds
+        if request_timeout_seconds is not None
+        else settings.llm_request_timeout_seconds
+    )
+
+    if provider in {"zai", "openai", "openrouter"}:
+        kwargs = {
+            "api_key": api_key,
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "timeout": timeout_seconds,
+        }
+        if base_url:
+            kwargs["base_url"] = base_url
+        return ChatOpenAI(**kwargs)
+
+    if provider == "anthropic":
+        return ChatAnthropic(
+            api_key=api_key,
+            model=model,
             temperature=temperature,
             max_tokens=max_tokens,
             timeout=timeout_seconds,
         )
 
-    if settings.provider == "ollama_cloud":
+    if provider in {"ollama_cloud", "ollama_local"}:
         # ChatOllama 1.x pasa kwargs al SDK ollama subyacente mediante
         # async_client_kwargs y sync_client_kwargs. La autenticación de
         # Ollama Cloud se inyecta como cabecera Bearer en ambos clientes.
         # base_url = https://ollama.com (sin /api); el SDK añade /api/chat.
         # Ollama usa num_predict en lugar de max_tokens.
-        auth_headers = {"Authorization": f"Bearer {settings.ollama_cloud_api_key}"}
-        timeout_seconds = (
-            request_timeout_seconds
-            if request_timeout_seconds is not None
-            else settings.llm_request_timeout_seconds
-        )
+        auth_headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         return ChatOllama(
-            model=settings.ollama_cloud_model,
-            base_url=settings.ollama_cloud_base_url,
+            model=model,
+            base_url=base_url,
             async_client_kwargs={
                 "headers": auth_headers,
                 "timeout": timeout_seconds,
@@ -198,8 +305,7 @@ def build_llm(
         )
 
     raise ValueError(
-        f"Proveedor de LLM no reconocido: '{settings.provider}'. "
-        "Valores válidos: 'zai', 'ollama_cloud'."
+        f"Proveedor de LLM no reconocido: '{provider}'."
     )
 
 
@@ -227,8 +333,12 @@ class BaseAgent(ABC):
     temperature: float = 0.0
     max_tokens: int = 32768
 
-    def __init__(self) -> None:
-        self._llm = build_llm(temperature=self.temperature, max_tokens=self.max_tokens)
+    def __init__(self, llm_config: LlmConfig | None = None) -> None:
+        self._llm = build_llm(
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            llm_config=llm_config,
+        )
 
     @property
     @abstractmethod

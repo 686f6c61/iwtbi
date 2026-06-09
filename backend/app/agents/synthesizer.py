@@ -16,6 +16,7 @@ import re
 
 from app.agents.base import build_llm, invoke_llm
 from app.config import settings
+from app.models.job import LlmConfig
 from langchain_core.messages import HumanMessage, SystemMessage
 
 _SYSTEM_PROMPT = """Eres un sintetizador técnico experto. Recibirás siete secciones Markdown generadas por agentes especializados que analizaron un repositorio de software.
@@ -253,21 +254,24 @@ class Synthesizer:
     resumen y las instrucciones, manteniendo el ancla en las secciones recibidas.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, llm_config: LlmConfig | None = None) -> None:
         self._llm = build_llm(
             temperature=0.1,
             max_tokens=32768,
             request_timeout_seconds=settings.llm_synth_request_timeout_seconds,
+            llm_config=llm_config,
         )
         self._overview_llm = build_llm(
             temperature=0.05,
             max_tokens=4096,
             request_timeout_seconds=settings.llm_synth_request_timeout_seconds,
+            llm_config=llm_config,
         )
         self._steps_llm = build_llm(
             temperature=0.05,
             max_tokens=8192,
             request_timeout_seconds=settings.llm_synth_request_timeout_seconds,
+            llm_config=llm_config,
         )
 
     async def _invoke_with_retries(self, llm, messages):

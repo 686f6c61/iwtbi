@@ -25,7 +25,9 @@ from pydantic import BaseModel, EmailStr
 from slowapi import Limiter
 
 from app.config import settings
+from app.agents.base import validate_llm_settings
 from app.database.analyses_repo import AnalysesRepo
+from app.models.job import LlmConfig
 from app.services.request_meta import get_client_ip, get_user_agent
 from app.services.git_cloner import validate_github_url
 from app.services.github_api import get_head_sha
@@ -46,6 +48,7 @@ class AnalyzeRequest(BaseModel):
     # EmailStr valida el formato RFC 5322 en tiempo de deserialización.
     # Requiere pydantic[email] (email-validator) instalado.
     email: Optional[EmailStr] = None
+    llm: Optional[LlmConfig] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -216,8 +219,13 @@ def get_analyze_router(store: JobStore, limiter: Limiter) -> APIRouter:
             if cached_response:
                 return cached_response
 
+        try:
+            validate_llm_settings(body.llm)
+        except ValueError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
         # Lanzar análisis nuevo
-        job = store.create(url)
+        job = store.create(url, llm_config=body.llm)
         orchestrator = Orchestrator(store=store)
 
         # asyncio.create_task() en lugar de BackgroundTasks para obtener

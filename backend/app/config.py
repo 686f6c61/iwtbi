@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # ── Proveedor z.ai (API OpenAI-compatible) ───────────────────────────────
     zai_api_key: str = "placeholder"
-    zai_base_url: str = "https://api.z.ai/v1"
+    zai_base_url: str = "https://api.z.ai/api/paas/v4/"
     zai_model: str = "glm-z1-flash"
 
     # ── Proveedor Ollama Cloud ────────────────────────────────────────────────
@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     repo_size_limit_mb: int = 100
     file_size_limit_kb: int = 500
     max_files: int = 2000
+    # 0 desactiva el corte por número de archivos candidatos.
     preflight_max_candidate_files: int = 750
     # Techo de caracteres del contexto total enviado a cada agente.
     # 80 000 chars ≈ 20 000 tokens: suficiente para repos medianos y seguro para

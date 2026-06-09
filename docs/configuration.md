@@ -13,13 +13,17 @@ IWTBI reads configuration from environment variables.
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `PROVIDER` | Yes | `zai` or `ollama_cloud` |
+| `PROVIDER` | Only for backend default | `zai` or `ollama_cloud`; the analysis form can override this per request |
 | `ZAI_API_KEY` | If `PROVIDER=zai` | API key for z.ai |
 | `ZAI_BASE_URL` | If `PROVIDER=zai` | OpenAI-compatible base URL |
 | `ZAI_MODEL` | If `PROVIDER=zai` | Model name |
 | `OLLAMA_CLOUD_API_KEY` | If `PROVIDER=ollama_cloud` | API key for Ollama Cloud |
 | `OLLAMA_CLOUD_BASE_URL` | If `PROVIDER=ollama_cloud` | Base URL without `/api` suffix |
 | `OLLAMA_CLOUD_MODEL` | If `PROVIDER=ollama_cloud` | Model name |
+
+The analysis UI also accepts per-analysis credentials for OpenAI, Anthropic,
+OpenRouter, Ollama Local, Ollama Cloud, and Z.AI. Those credentials are kept in
+the in-memory job only and are not persisted with saved analyses.
 
 ## Runtime and safety limits
 
@@ -28,7 +32,7 @@ IWTBI reads configuration from environment variables.
 | `REPO_SIZE_LIMIT_MB` | `100` | Maximum repository size before cloning is blocked |
 | `FILE_SIZE_LIMIT_KB` | `500` | Maximum size per text file before truncation/exclusion |
 | `MAX_FILES` | `2000` | Maximum files the reader will consider |
-| `PREFLIGHT_MAX_CANDIDATE_FILES` | `750` | Public plan hard stop used by preflight |
+| `PREFLIGHT_MAX_CANDIDATE_FILES` | `750` | Public plan hard stop used by preflight; set `0` to disable |
 | `MAX_CONTEXT_CHARS` | `80000` | Total character budget for prioritized file contents |
 | `ANALYZE_RATE_LIMIT` | `5/hour` | Costly analysis endpoint throttle |
 | `TICKET_RATE_LIMIT` | `30/minute` | Ticket emission throttle |

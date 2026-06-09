@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from app.agents.base import invoke_llm
+from app.agents.base import invoke_llm, validate_llm_settings
 
 
 class _FakeResponse:
@@ -57,3 +57,24 @@ async def test_invoke_llm_fails_fast_when_provider_times_out(monkeypatch):
         await invoke_llm(llm, ["hola"])
 
     assert llm.calls == 1
+
+
+def test_validate_llm_settings_rejects_missing_zai_key(monkeypatch):
+    monkeypatch.setattr("app.agents.base.settings.provider", "zai")
+    monkeypatch.setattr("app.agents.base.settings.zai_api_key", "your_z_ai_key_here")
+    monkeypatch.setattr(
+        "app.agents.base.settings.zai_base_url",
+        "https://api.z.ai/api/paas/v4/",
+    )
+
+    with pytest.raises(ValueError, match="API key real"):
+        validate_llm_settings()
+
+
+def test_validate_llm_settings_rejects_legacy_zai_base_url(monkeypatch):
+    monkeypatch.setattr("app.agents.base.settings.provider", "zai")
+    monkeypatch.setattr("app.agents.base.settings.zai_api_key", "test-key")
+    monkeypatch.setattr("app.agents.base.settings.zai_base_url", "https://api.z.ai/v1")
+
+    with pytest.raises(ValueError, match="endpoint antiguo"):
+        validate_llm_settings()

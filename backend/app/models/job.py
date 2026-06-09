@@ -9,9 +9,28 @@ los resultados parciales de cada agente vía SSE.
 import asyncio
 import uuid
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+
+LlmProvider = Literal[
+    "zai",
+    "openai",
+    "openrouter",
+    "anthropic",
+    "ollama_local",
+    "ollama_cloud",
+]
+
+
+class LlmConfig(BaseModel):
+    """Configuración LLM efímera para un análisis concreto."""
+
+    provider: LlmProvider
+    model: str
+    api_key: Optional[str] = Field(default=None, exclude=True)
+    base_url: Optional[str] = None
 
 
 class JobStatus(str, Enum):
@@ -42,6 +61,7 @@ class Job(BaseModel):
 
     job_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     repo_url: str
+    llm_config: Optional[LlmConfig] = Field(default=None, exclude=True)
     status: JobStatus = JobStatus.PENDING
     document: Optional[str] = None
     error: Optional[str] = None

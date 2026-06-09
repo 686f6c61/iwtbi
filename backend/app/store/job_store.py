@@ -12,7 +12,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from app.models.job import Job, JobStatus
+from app.models.job import Job, JobStatus, LlmConfig
 
 
 @dataclass(slots=True)
@@ -38,7 +38,7 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
         self._tickets: dict[str, _TicketRecord] = {}
 
-    def create(self, repo_url: str) -> Job:
+    def create(self, repo_url: str, llm_config: LlmConfig | None = None) -> Job:
         """
         Crea un nuevo job y lo registra en el store.
 
@@ -48,7 +48,7 @@ class JobStore:
         Returns:
             El job creado con su cola SSE inicializada.
         """
-        job = Job(repo_url=repo_url)
+        job = Job(repo_url=repo_url, llm_config=llm_config)
         job.new_queue()
         self._jobs[job.job_id] = job
         return job

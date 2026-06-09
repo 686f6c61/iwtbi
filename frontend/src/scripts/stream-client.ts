@@ -67,6 +67,21 @@ export interface RepoPreflightData {
   candidate_file_limit: number;
 }
 
+export type LlmProvider =
+  | "openai"
+  | "anthropic"
+  | "openrouter"
+  | "ollama_local"
+  | "ollama_cloud"
+  | "zai";
+
+export interface LlmConfigPayload {
+  provider: LlmProvider;
+  model: string;
+  api_key?: string | null;
+  base_url?: string | null;
+}
+
 /** Opciones opcionales para el inicio del análisis. */
 export interface StartAnalysisOptions {
   /** Si true, fuerza un análisis nuevo ignorando el caché. */
@@ -75,6 +90,8 @@ export interface StartAnalysisOptions {
   email?: string;
   /** Ticket efímero emitido por el backend para autorizar el análisis. */
   ticket?: string;
+  /** Configuración LLM efímera usada solo para este análisis. */
+  llm?: LlmConfigPayload;
 }
 
 /** Resultado inmediato del alta del análisis en el backend. */
@@ -225,6 +242,7 @@ export async function startAnalysis(
         url: repoUrl,
         force_new: options.forceNew ?? false,
         email: options.email ?? null,
+        llm: options.llm ?? null,
       }),
     });
 
