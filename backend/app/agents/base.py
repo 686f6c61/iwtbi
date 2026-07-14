@@ -225,6 +225,8 @@ class _OllamaCloudDirectAdapter:
         self,
         *,
         model: str,
+        base_url: str,
+        api_key: str,
         temperature: float,
         max_tokens: int,
         timeout_seconds: float,
@@ -233,8 +235,8 @@ class _OllamaCloudDirectAdapter:
         self._temperature = temperature
         self._max_tokens = max_tokens
         self._client = AsyncClient(
-            host=settings.ollama_cloud_base_url,
-            headers={"Authorization": f"Bearer {settings.ollama_cloud_api_key}"},
+            host=base_url,
+            headers={"Authorization": f"Bearer {api_key}"},
             timeout=timeout_seconds,
         )
 
@@ -382,6 +384,8 @@ def build_llm(
     request_timeout_seconds: float | None = None,
     provider: str | None = None,
     model_override: str | None = None,
+    api_key_override: str | None = None,
+    base_url_override: str | None = None,
 ) -> Union[ChatOpenAI, ChatOllama, _OllamaCloudDirectAdapter]:
     """
     Construye el cliente LLM según el proveedor configurado en settings.
@@ -413,8 +417,8 @@ def build_llm(
             else settings.llm_request_timeout_seconds
         )
         return ChatOpenAI(
-            api_key=settings.openai_compatible_api_key,
-            base_url=settings.openai_compatible_base_url,
+            api_key=api_key_override or settings.openai_compatible_api_key,
+            base_url=base_url_override or settings.openai_compatible_base_url,
             model=model_override or settings.openai_compatible_model,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -428,8 +432,8 @@ def build_llm(
             else settings.llm_request_timeout_seconds
         )
         return ChatOpenAI(
-            api_key=settings.nan_api_key,
-            base_url=settings.nan_base_url,
+            api_key=api_key_override or settings.nan_api_key,
+            base_url=base_url_override or settings.nan_base_url,
             model=model_override or settings.nan_model,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -444,8 +448,8 @@ def build_llm(
             else settings.llm_request_timeout_seconds
         )
         return ChatOpenAI(
-            api_key=settings.zai_api_key,
-            base_url=settings.zai_base_url,
+            api_key=api_key_override or settings.zai_api_key,
+            base_url=base_url_override or settings.zai_base_url,
             model=model_override or settings.zai_model,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -458,7 +462,9 @@ def build_llm(
         # Ollama Cloud se inyecta como cabecera Bearer en ambos clientes.
         # base_url = https://ollama.com (sin /api); el SDK añade /api/chat.
         # Ollama usa num_predict en lugar de max_tokens.
-        auth_headers = {"Authorization": f"Bearer {settings.ollama_cloud_api_key}"}
+        api_key = api_key_override or settings.ollama_cloud_api_key
+        base_url = base_url_override or settings.ollama_cloud_base_url
+        auth_headers = {"Authorization": f"Bearer {api_key}"}
         timeout_seconds = (
             request_timeout_seconds
             if request_timeout_seconds is not None
@@ -468,13 +474,15 @@ def build_llm(
         if effective_model.endswith(":cloud"):
             return _OllamaCloudDirectAdapter(
                 model=effective_model,
+                base_url=base_url,
+                api_key=api_key,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 timeout_seconds=timeout_seconds,
             )
         return ChatOllama(
             model=effective_model,
-            base_url=settings.ollama_cloud_base_url,
+            base_url=base_url,
             async_client_kwargs={
                 "headers": auth_headers,
                 "timeout": timeout_seconds,
@@ -522,6 +530,8 @@ class BaseAgent(ABC):
         *,
         provider_override: str | None = None,
         model_override: str | None = None,
+        api_key_override: str | None = None,
+        base_url_override: str | None = None,
         enable_fallback: bool = True,
     ) -> None:
         self._primary_provider = provider_override or settings.provider
@@ -532,6 +542,8 @@ class BaseAgent(ABC):
             request_timeout_seconds=settings.llm_agent_request_timeout_seconds,
             provider=self._primary_provider,
             model_override=model_override,
+            api_key_override=api_key_override,
+            base_url_override=base_url_override,
         )
         self._fallback_llm = None
         self._fallback_provider_label = None

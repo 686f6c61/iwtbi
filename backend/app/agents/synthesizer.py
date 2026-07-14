@@ -231,6 +231,8 @@ class Synthesizer:
         *,
         provider_override: str | None = None,
         model_override: str | None = None,
+        api_key_override: str | None = None,
+        base_url_override: str | None = None,
         enable_fallback: bool = True,
     ) -> None:
         effective_provider = provider_override or settings.provider
@@ -240,6 +242,8 @@ class Synthesizer:
             request_timeout_seconds=settings.llm_synth_request_timeout_seconds,
             provider=effective_provider,
             model_override=model_override,
+            api_key_override=api_key_override,
+            base_url_override=base_url_override,
         )
         self._fallback_llms = []
         if enable_fallback:

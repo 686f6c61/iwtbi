@@ -23,6 +23,34 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.0",
+    date: "14 jul 2026",
+    sections: [
+      {
+        type: "added",
+        items: [
+          "Perfiles privados de IA por análisis interno, inspirados por la propuesta de @lacrimae0rerum en la PR pública #1.",
+          "Perfiles con nombre configurados en el servidor para NaN, z.ai, Ollama Cloud y endpoints OpenAI-compatible.",
+        ],
+      },
+      {
+        type: "changed",
+        items: [
+          "Elegir un perfil distinto del predeterminado desde la ruta interna crea un informe nuevo para respetar el modelo seleccionado.",
+          "La selección queda restringida al servidor y no aparece en la interfaz pública ni en el estado de salud.",
+          "Cada instalación self-host puede ofrecer sus propios perfiles sin heredar datos ni claves de producción.",
+        ],
+      },
+      {
+        type: "fixed",
+        items: [
+          "Redis maneja únicamente el identificador del perfil; las claves y URL privadas se resuelven dentro de la API y el worker.",
+          "Los perfiles desconocidos, incompletos, duplicados o con URL no válida se rechazan antes de iniciar el análisis.",
+        ],
+      },
+    ],
+  },
+  {
     version: "2.0.0",
     date: "14 jul 2026",
     sections: [

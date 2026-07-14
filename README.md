@@ -17,6 +17,7 @@ The application ships as a small monorepo:
 
 - Measures a repository before analysis to decide whether it fits the safe context budget.
 - Runs a multi-agent backend pipeline over the cloned repository.
+- Supports private server-managed AI profiles for controlled internal analyses.
 - Streams progress to the browser through Server-Sent Events (SSE).
 - Saves completed analyses to internal PostgreSQL and exposes them in a public library.
 - Optionally emails users when an analysis finishes.
@@ -91,6 +92,9 @@ Hamilton runs after them as a separate integration call.
 2. Add your own AI endpoint, model and API key to `.env`. The default
    `openai_compatible` profile works with OpenAI-compatible services. NaN,
    z.ai and Ollama Cloud profiles are also available.
+
+   Administrators can define private profiles in `LLM_PROFILES_JSON` for the
+   protected internal route. They are not shown in the public frontend.
 
 3. Start the stack:
 

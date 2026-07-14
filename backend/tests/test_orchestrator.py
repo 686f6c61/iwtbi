@@ -3,7 +3,10 @@
 import asyncio
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from pydantic import SecretStr
 
 from app.services.orchestrator import (
     AllAgentsFailedError,
@@ -80,6 +83,74 @@ async def test_orchestrator_completes_job(store, job):
         git_sha="abc1234",
         tags=["python", "fastapi", "astro", "docker", "redis", "observability"],
     )
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resolves_selected_profile_only_inside_worker(store):
+    """El worker convierte el ID persistido en credenciales al ejecutar."""
+    job = store.create(
+        "https://github.com/kelseyhightower/nocode",
+        llm_profile_id="revision",
+    )
+    orchestrator = Orchestrator(store=store)
+    fake_context = RepoContext(tree="└── README.md", files={"README.md": "# nocode"})
+    runtime_components = (
+        orchestrator._reader,
+        orchestrator._synthesizer,
+        orchestrator._agents,
+    )
+
+    with (
+        patch(
+            "app.services.orchestrator.get_llm_profile",
+            return_value=SimpleNamespace(
+                provider="openai_compatible",
+                model="profile-model",
+                api_key=SecretStr("profile-key"),  # pragma: allowlist secret
+                base_url="https://profile.example.test/v1",
+                label="Revisión profunda",
+            ),
+        ),
+        patch.object(
+            orchestrator,
+            "_build_runtime_components",
+            return_value=runtime_components,
+        ) as build_components,
+        patch.object(
+            orchestrator._cloner,
+            "clone",
+            new_callable=AsyncMock,
+            return_value=(Path("/tmp/fake"), "abc1234"),
+        ),
+        patch.object(orchestrator._cloner, "cleanup"),
+        patch.object(orchestrator._reader, "read", return_value=fake_context),
+        patch.object(
+            orchestrator,
+            "_run_agents",
+            new_callable=AsyncMock,
+            return_value=_all_sections(),
+        ),
+        patch.object(
+            orchestrator._synthesizer,
+            "synthesize",
+            new_callable=AsyncMock,
+            return_value="# Documento final",
+        ),
+        patch.object(orchestrator, "_schedule_job_cleanup", new_callable=AsyncMock),
+        patch("app.services.github_api.get_repo_topics", new_callable=AsyncMock, return_value=[]),
+        patch("app.services.orchestrator.AnalysesRepo.save"),
+        patch("app.database.notifications_repo.NotificationsRepo.find_by_job", return_value=[]),
+    ):
+        await orchestrator.run(job.job_id)
+
+    build_components.assert_called_once_with(
+        provider_override="openai_compatible",
+        model_override="profile-model",
+        api_key_override="profile-key",  # pragma: allowlist secret
+        base_url_override="https://profile.example.test/v1",
+        disable_fallback=False,
+    )
+    assert store.get(job.job_id).status == JobStatus.COMPLETE
 
 
 @pytest.mark.asyncio

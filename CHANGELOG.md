@@ -5,6 +5,25 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ---
 
+## [2.1.0] — 2026-07-14
+
+### Añadido
+- Perfiles privados de IA por análisis interno, inspirados por la propuesta de @lacrimae0rerum en la PR pública #1.
+- Perfiles con nombre configurados íntegramente en el servidor mediante `LLM_PROFILES_JSON`, compatibles con NaN, z.ai, Ollama Cloud y endpoints OpenAI-compatible.
+- Validación al arrancar para detectar perfiles duplicados, incompletos o con URL no válida antes de aceptar tráfico.
+
+### Modificado
+- Los análisis con un perfil distinto del predeterminado generan un informe nuevo en lugar de reutilizar silenciosamente una caché creada con otro modelo.
+- La selección queda restringida a la ruta interna protegida; no aparece en la web pública ni en `/health`.
+- La configuración self-host permite publicar tantos perfiles como necesite cada instalación sin incluir datos ni claves de IWTBI producción.
+
+### Corregido
+- Las claves y URL privadas no pasan por el navegador, `localStorage`, los trabajos de Redis ni la Biblioteca; la ruta interna envía únicamente un identificador validado.
+- API y worker resuelven el mismo perfil al ejecutar el trabajo, manteniendo la selección después de pasar por la cola Redis.
+- Perfiles inexistentes, duplicados, incompletos o con URL no HTTP(S) se rechazan antes de consumir recursos de análisis.
+
+---
+
 ## [2.0.0] — 2026-07-14
 
 ### Añadido

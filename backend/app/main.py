@@ -19,6 +19,7 @@ from app.routes.stream import get_stream_router
 from app.routes.subscriptions import get_subscriptions_router
 from app.routes.ticket import get_ticket_router
 from app.services.request_meta import get_client_ip
+from app.services.llm_profiles import get_llm_profiles
 from app.store.job_store import JobStore
 from app.store.redis_job_store import RedisJobStore
 
@@ -42,14 +43,15 @@ limiter = Limiter(
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    """Asegura el esquema antes de aceptar tráfico."""
+    """Valida la configuración y el esquema antes de aceptar tráfico."""
+    get_llm_profiles()
     ensure_schema()
     yield
 
 app = FastAPI(
     title="IWTBI API",
     description="Analiza repositorios GitHub y genera documentación de reconstrucción accionable para IAs.",
-    version="1.0.0",
+    version="2.1.0",
     docs_url="/docs" if settings.api_docs_enabled else None,
     redoc_url="/redoc" if settings.api_docs_enabled else None,
     openapi_url="/openapi.json" if settings.api_docs_enabled else None,

@@ -48,6 +48,7 @@ class RedisJobStore:
         self,
         repo_url: str,
         *,
+        llm_profile_id: str = "default",
         provider_override: str | None = None,
         model_override: str | None = None,
         disable_fallback: bool = False,
@@ -55,6 +56,7 @@ class RedisJobStore:
     ) -> Job:
         job = Job(
             repo_url=repo_url,
+            llm_profile_id=llm_profile_id,
             provider_override=provider_override,
             model_override=model_override,
             disable_fallback=disable_fallback,
@@ -65,6 +67,7 @@ class RedisJobStore:
             mapping={
                 "job_id": job.job_id,
                 "repo_url": job.repo_url,
+                "llm_profile_id": job.llm_profile_id,
                 "provider_override": job.provider_override or "",
                 "model_override": job.model_override or "",
                 "disable_fallback": "1" if job.disable_fallback else "0",
@@ -84,6 +87,7 @@ class RedisJobStore:
         return Job(
             job_id=data["job_id"],
             repo_url=data["repo_url"],
+            llm_profile_id=data.get("llm_profile_id") or "default",
             provider_override=data.get("provider_override") or None,
             model_override=data.get("model_override") or None,
             disable_fallback=data.get("disable_fallback") == "1",

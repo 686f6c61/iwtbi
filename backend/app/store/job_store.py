@@ -43,6 +43,7 @@ class JobStore:
         self,
         repo_url: str,
         *,
+        llm_profile_id: str = "default",
         provider_override: str | None = None,
         model_override: str | None = None,
         disable_fallback: bool = False,
@@ -59,6 +60,7 @@ class JobStore:
         """
         job = Job(
             repo_url=repo_url,
+            llm_profile_id=llm_profile_id,
             provider_override=provider_override,
             model_override=model_override,
             disable_fallback=disable_fallback,

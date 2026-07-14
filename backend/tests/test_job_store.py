@@ -18,6 +18,13 @@ def test_create_and_get_job(store):
     assert retrieved.repo_url == "https://github.com/a/b"
 
 
+def test_create_and_get_job_preserves_llm_profile_id(store):
+    """El store en memoria conserva únicamente el identificador del perfil."""
+    job = store.create("https://github.com/a/b", llm_profile_id="revision")
+
+    assert store.get(job.job_id).llm_profile_id == "revision"
+
+
 def test_get_nonexistent_returns_none(store):
     """Buscar un ID inexistente debe devolver None."""
     assert store.get("no-existe") is None

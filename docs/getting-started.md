@@ -95,6 +95,10 @@ Only one needs to be configured for the app to run. The generic profile works
 with any service that implements the OpenAI chat API; set the base URL, model
 identifier and key supplied by that service.
 
+For controlled internal analyses with another model, set `LLM_PROFILES_JSON`
+as described in [Configuration](configuration.md). Leave it as `[]` when you do
+not need administrative profiles. They are never shown in the public UI.
+
 ### Resend
 
 Email notifications are optional. If `RESEND_API_KEY` is empty, analysis still works, but the app will skip notification fanout.

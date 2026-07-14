@@ -28,6 +28,30 @@ IWTBI reads configuration from environment variables.
 | `OLLAMA_CLOUD_BASE_URL` | If `PROVIDER=ollama_cloud` | Base URL without `/api` suffix |
 | `OLLAMA_CLOUD_MODEL` | If `PROVIDER=ollama_cloud` | Primary Ollama Cloud model, for example `deepseek-v4-pro:cloud` |
 | `OLLAMA_CLOUD_FALLBACK_MODELS` | Optional | Comma-separated Ollama Cloud fallback models, for example `kimi-k2.7-code:cloud` |
+| `LLM_PROFILES_JSON` | Optional | Private server-side JSON list of profiles for controlled internal analyses |
+
+### Internal per-analysis profiles
+
+`PROVIDER` remains the public default. To run controlled internal analyses with
+another server-managed model, define `LLM_PROFILES_JSON` as a single-line JSON
+list:
+
+```env
+LLM_PROFILES_JSON=[{"id":"zai","label":"z.ai / GLM 5.2","provider":"zai","model":"glm-5.2"},{"id":"local","label":"Modelo local","provider":"openai_compatible","model":"qwen-local","base_url":"http://llm:11434/v1","api_key_required":false}]
+```
+
+Each profile accepts `id`, `label`, `provider`, `model`, and optionally
+`base_url`, `api_key`, and `api_key_required`. Prefer the provider variables
+above instead of putting `api_key` in the JSON. A profile without its own key
+inherits the matching `NAN_API_KEY`, `ZAI_API_KEY`,
+`OLLAMA_CLOUD_API_KEY`, or `OPENAI_COMPATIBLE_API_KEY`.
+
+Profiles are not listed in the public UI or `/health`, and the public analysis
+endpoint rejects `llm_profile_id`. An authorized caller may submit the ID only
+to `POST /api/analyze/internal` together with `X-Internal-Token`. API keys and
+base URLs stay in the API/worker environment and are never stored in browser
+storage, Redis jobs, or the public library. Unknown or unavailable profiles
+are rejected before a job is created.
 
 Notes for Ollama Cloud models:
 - Models published specifically as Cloud-only should use the exact `:cloud` suffix from Ollama's library, for example `deepseek-v4-pro:cloud`.

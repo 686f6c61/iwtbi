@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import SecretStr
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -261,6 +262,64 @@ def test_analyze_valid_url_returns_job_id(client: TestClient):
     assert job is not None
     queued_event = job.queue.get_nowait()
     assert queued_event == {"type": "status", "data": {"status": "queued"}}
+
+
+def test_internal_analyze_stores_only_selected_llm_profile_id(client: TestClient):
+    """La ruta interna guarda el ID del perfil, sin transportar credenciales."""
+    with (
+        patch.object(
+            settings,
+            "llm_profiles_json",
+            SecretStr(
+                '[{"id":"revision","label":"Revisión profunda",'
+                '"provider":"nan","model":"qwen-test"}]'
+            ),
+        ),
+        patch.object(settings, "nan_api_key", "configured-for-tests"),
+    ):
+        response = client.post(
+            "/api/analyze/internal",
+            headers=_internal_headers(),
+            json={
+                "url": "https://github.com/kelseyhightower/nocode",
+                "llm_profile_id": "revision",
+            },
+        )
+
+    assert response.status_code == 200
+    job = client.app.state.job_store.get(response.json()["job_id"])
+    assert job is not None
+    assert job.llm_profile_id == "revision"
+    assert "configured-for-tests" not in job.model_dump_json()
+
+
+def test_internal_analyze_rejects_unknown_llm_profile(client: TestClient):
+    """La ruta interna rechaza un ID que no existe en el servidor."""
+    response = client.post(
+        "/api/analyze/internal",
+        headers=_internal_headers(),
+        json={
+            "url": "https://github.com/kelseyhightower/nocode",
+            "llm_profile_id": "no-existe",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "El perfil de IA seleccionado no existe."
+
+
+def test_public_analyze_does_not_accept_llm_profile_selection(client: TestClient):
+    """El público no puede elegir ni descubrir perfiles internos."""
+    response = client.post(
+        "/api/analyze",
+        headers={"X-Ticket": _issue_ticket(client), "user-agent": "pytest"},
+        json={
+            "url": "https://github.com/kelseyhightower/nocode",
+            "llm_profile_id": "revision",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_analyze_requires_ticket(client: TestClient):

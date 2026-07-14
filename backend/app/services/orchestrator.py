@@ -29,6 +29,7 @@ from app.config import settings
 from app.services.analysis_tags import derive_analysis_tags, merge_tags
 from app.services.file_reader import FileReader
 from app.services.git_cloner import GitCloner
+from app.services.llm_profiles import get_llm_profile
 from app.store.job_store import JobStore
 
 _logger = logging.getLogger(__name__)
@@ -130,10 +131,18 @@ class Orchestrator:
         *,
         provider_override: str | None,
         model_override: str | None,
+        api_key_override: str | None,
+        base_url_override: str | None,
         disable_fallback: bool,
     ) -> tuple[FileReader, Synthesizer, list[BaseAgent]]:
         """Construye reader/LLMs específicos por job si hay override interno."""
-        if not provider_override and not model_override and not disable_fallback:
+        if (
+            not provider_override
+            and not model_override
+            and not api_key_override
+            and not base_url_override
+            and not disable_fallback
+        ):
             return self._reader, self._synthesizer, self._agents
 
         reader = FileReader(
@@ -144,11 +153,15 @@ class Orchestrator:
         synthesizer = Synthesizer(
             provider_override=provider_override,
             model_override=model_override,
+            api_key_override=api_key_override,
+            base_url_override=base_url_override,
             enable_fallback=not disable_fallback,
         )
         agent_kwargs = {
             "provider_override": provider_override,
             "model_override": model_override,
+            "api_key_override": api_key_override,
+            "base_url_override": base_url_override,
             "enable_fallback": False,
         }
         agents: list[BaseAgent] = [
@@ -185,20 +198,35 @@ class Orchestrator:
             return
 
         try:
+            provider_override = job.provider_override
+            model_override = job.model_override
+            api_key_override = None
+            base_url_override = None
+            runtime_profile_label = job.profile_label
+            if not provider_override and job.llm_profile_id != "default":
+                runtime_profile = get_llm_profile(job.llm_profile_id)
+                provider_override = runtime_profile.provider
+                model_override = runtime_profile.model
+                api_key_override = runtime_profile.api_key.get_secret_value()
+                base_url_override = runtime_profile.base_url
+                runtime_profile_label = runtime_profile.label
+
             reader, synthesizer, agents = self._build_runtime_components(
-                provider_override=job.provider_override,
-                model_override=job.model_override,
+                provider_override=provider_override,
+                model_override=model_override,
+                api_key_override=api_key_override,
+                base_url_override=base_url_override,
                 disable_fallback=job.disable_fallback,
             )
-            if job.profile_label:
+            if runtime_profile_label:
                 _logger.info(
                     "Job '%s' ejecutando perfil interno '%s' (provider=%s model=%s fallback=%s)",
                     job_id,
-                    job.profile_label,
-                    job.provider_override or settings.provider,
+                    runtime_profile_label,
+                    provider_override or settings.provider,
                     _model_name_for_provider(
-                        job.provider_override or settings.provider,
-                        job.model_override,
+                        provider_override or settings.provider,
+                        model_override,
                     ),
                     "off" if job.disable_fallback else "on",
                 )
@@ -231,7 +259,7 @@ class Orchestrator:
                     context,
                     agents=agents,
                     allow_backup_recovery=not job.disable_fallback,
-                    primary_provider=job.provider_override or settings.provider,
+                    primary_provider=provider_override or settings.provider,
                 )
             except AllAgentsFailedError as agents_exc:
                 _logger.error(

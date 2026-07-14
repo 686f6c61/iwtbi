@@ -29,6 +29,7 @@ from slowapi import Limiter
 from app.config import settings
 from app.database.analyses_repo import AnalysesRepo
 from app.services.request_meta import get_client_ip, get_user_agent
+from app.services.llm_profiles import get_llm_profile
 from app.services.git_cloner import validate_github_url
 from app.services.github_api import get_head_sha
 from app.services.orchestrator import Orchestrator
@@ -86,6 +87,12 @@ class AnalyzeRequest(BaseModel):
 class InternalAnalyzeRequest(AnalyzeRequest):
     """Cuerpo ampliado para benchmarks internos y backfills controlados."""
 
+    llm_profile_id: str = Field(
+        default="default",
+        min_length=1,
+        max_length=32,
+        pattern=r"^[a-z0-9][a-z0-9_-]{0,31}$",
+    )
     provider_override: Optional[
         Literal["openai_compatible", "nan", "zai", "ollama_cloud"]
     ] = None
@@ -268,8 +275,20 @@ def get_analyze_router(store: JobStore, limiter: Limiter) -> APIRouter:
 
         repo_full_name = _extract_full_name(url)
 
+        provider_override = getattr(body, "provider_override", None)
+        llm_profile_id = (
+            "default"
+            if provider_override
+            else getattr(body, "llm_profile_id", "default")
+        )
+        if llm_profile_id != "default":
+            try:
+                get_llm_profile(llm_profile_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         # Comprobar caché si no se fuerza un análisis nuevo
-        if not body.force_new:
+        if not body.force_new and llm_profile_id == "default":
             cached_response = await _check_cache(url, repo_full_name)
             if cached_response:
                 if body.email and body.subscribe_updates:
@@ -284,13 +303,13 @@ def get_analyze_router(store: JobStore, limiter: Limiter) -> APIRouter:
                 return cached_response
 
         # Lanzar análisis nuevo
-        provider_override = getattr(body, "provider_override", None)
         model_override = getattr(body, "model_override", None)
         disable_fallback = bool(getattr(body, "disable_fallback", False))
         profile_label = getattr(body, "profile_label", None)
 
         job = store.create(
             url,
+            llm_profile_id=llm_profile_id,
             provider_override=provider_override,
             model_override=model_override,
             disable_fallback=disable_fallback,

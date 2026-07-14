@@ -82,6 +82,27 @@ def test_build_llm_supports_generic_openai_compatible(monkeypatch):
     assert provider_label("openai_compatible") == "OpenAI-compatible"
 
 
+def test_build_llm_uses_server_resolved_profile_overrides(monkeypatch):
+    captured = {}
+
+    class _FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("app.agents.base.ChatOpenAI", _FakeChatOpenAI)
+
+    build_llm(
+        provider="openai_compatible",
+        model_override="profile-model",
+        api_key_override="profile-key",  # pragma: allowlist secret
+        base_url_override="https://profile.example.test/v1",
+    )
+
+    assert captured["model"] == "profile-model"
+    assert captured["api_key"] == "profile-key"  # pragma: allowlist secret
+    assert captured["base_url"] == "https://profile.example.test/v1"
+
+
 def test_build_llm_supports_nan_openai_compatible(monkeypatch):
     captured = {}
 
