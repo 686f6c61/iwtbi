@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     openai_compatible_api_key: str = ""
     openai_compatible_base_url: str = "https://api.openai.com/v1"
     openai_compatible_model: str = ""
-    # Perfiles seleccionables por análisis. Puede contener credenciales y por
-    # eso se mantiene como SecretStr y nunca se devuelve directamente al cliente.
+    # Perfiles privados para análisis internos. Puede contener credenciales y
+    # por eso se mantiene como SecretStr y nunca se devuelve al cliente.
     llm_profiles_json: SecretStr = SecretStr("[]")
 
     # ── Proveedor NaN builders (OpenAI-compatible / principal) ───────────────

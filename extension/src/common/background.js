@@ -5,20 +5,6 @@ if (typeof importScripts === "function") {
 const ext = globalThis.browser ?? globalThis.chrome;
 const { parseGithubRepoUrl } = globalThis.IWTBIRepo;
 
-const ACTIVE_ICONS = {
-  16: "assets/icons/active-16.png",
-  32: "assets/icons/active-32.png",
-  48: "assets/icons/active-48.png",
-  128: "assets/icons/active-128.png",
-};
-
-const IDLE_ICONS = {
-  16: "assets/icons/idle-16.png",
-  32: "assets/icons/idle-32.png",
-  48: "assets/icons/idle-48.png",
-  128: "assets/icons/idle-128.png",
-};
-
 function runSafely(task) {
   Promise.resolve(task).catch(() => {
     // La pestaña puede cerrarse o cambiar mientras se actualiza el icono.
@@ -30,7 +16,6 @@ async function setActionState(tabId, repoInfo) {
 
   if (repoInfo) {
     await ext.action.enable(tabId);
-    await ext.action.setIcon({ tabId, path: ACTIVE_ICONS });
     await ext.action.setTitle({
       tabId,
       title: `IWTBI listo para analizar ${repoInfo.slug}`,
@@ -39,7 +24,6 @@ async function setActionState(tabId, repoInfo) {
   }
 
   await ext.action.disable(tabId);
-  await ext.action.setIcon({ tabId, path: IDLE_ICONS });
   await ext.action.setTitle({
     tabId,
     title: "IWTBI se activa solo sobre repositorios de GitHub",

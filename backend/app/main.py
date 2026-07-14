@@ -51,7 +51,7 @@ async def _lifespan(_app: FastAPI):
 app = FastAPI(
     title="IWTBI API",
     description="Analiza repositorios GitHub y genera documentación de reconstrucción accionable para IAs.",
-    version="2.1.0",
+    version="2.1.1",
     docs_url="/docs" if settings.api_docs_enabled else None,
     redoc_url="/redoc" if settings.api_docs_enabled else None,
     openapi_url="/openapi.json" if settings.api_docs_enabled else None,

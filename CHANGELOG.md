@@ -5,6 +5,15 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ---
 
+## [2.1.1] — 2026-07-14
+
+### Corregido
+- El icono de la extensión en la barra de Chrome y Firefox usa ahora el favicon oficial de IWTBI en todos sus estados y tamaños.
+- El empaquetado genera una única familia de iconos desde `frontend/public/favicon.png`, evitando que una flecha distinta vuelva a sustituir la identidad visual.
+- Una prueba de construcción verifica ambos manifiestos, elimina variantes antiguas y compara el PNG generado con el favicon fuente.
+
+---
+
 ## [2.1.0] — 2026-07-14
 
 ### Añadido
@@ -15,7 +24,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 ### Modificado
 - Los análisis con un perfil distinto del predeterminado generan un informe nuevo en lugar de reutilizar silenciosamente una caché creada con otro modelo.
 - La selección queda restringida a la ruta interna protegida; no aparece en la web pública ni en `/health`.
-- La configuración self-host permite publicar tantos perfiles como necesite cada instalación sin incluir datos ni claves de IWTBI producción.
+- La configuración self-host permite definir tantos perfiles internos como necesite cada instalación sin incluir datos ni claves de IWTBI producción.
 
 ### Corregido
 - Las claves y URL privadas no pasan por el navegador, `localStorage`, los trabajos de Redis ni la Biblioteca; la ruta interna envía únicamente un identificador validado.

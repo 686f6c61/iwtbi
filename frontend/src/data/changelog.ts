@@ -23,6 +23,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.1",
+    date: "14 jul 2026",
+    sections: [
+      {
+        type: "fixed",
+        items: [
+          "El icono de la extensión en Chrome y Firefox usa ahora el favicon oficial de IWTBI en todos sus estados y tamaños.",
+          "El empaquetado parte de una única imagen de marca y una prueba comprueba que ambos manifiestos apuntan al icono correcto.",
+        ],
+      },
+    ],
+  },
+  {
     version: "2.1.0",
     date: "14 jul 2026",
     sections: [
@@ -38,7 +51,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         items: [
           "Elegir un perfil distinto del predeterminado desde la ruta interna crea un informe nuevo para respetar el modelo seleccionado.",
           "La selección queda restringida al servidor y no aparece en la interfaz pública ni en el estado de salud.",
-          "Cada instalación self-host puede ofrecer sus propios perfiles sin heredar datos ni claves de producción.",
+          "Cada instalación self-host puede definir sus propios perfiles internos sin heredar datos ni claves de producción.",
         ],
       },
       {

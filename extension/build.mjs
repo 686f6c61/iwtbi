@@ -7,7 +7,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname);
 const distDir = join(rootDir, "dist");
 const commonDir = join(rootDir, "src", "common");
-const iconsDir = join(rootDir, "src", "assets", "icons");
 const brandIconSource = resolve(rootDir, "..", "frontend", "public", "favicon.png");
 const fontsDir = resolve(rootDir, "..", "frontend", "public", "fonts");
 const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
@@ -54,18 +53,6 @@ async function generateIcons(targetDir) {
   const iconTargetDir = join(targetDir, "assets", "icons");
   ensureDir(iconTargetDir);
 
-  for (const state of ["active", "idle"]) {
-    const sourceSvg = join(iconsDir, `icon-${state}.svg`);
-    cpSync(sourceSvg, join(iconTargetDir, `${state}.svg`));
-
-    for (const size of iconSizes) {
-      await sharp(sourceSvg)
-        .resize(size, size)
-        .png()
-        .toFile(join(iconTargetDir, `${state}-${size}.png`));
-    }
-  }
-
   for (const size of iconSizes) {
     await sharp(brandIconSource)
       .resize(size, size)
@@ -91,7 +78,7 @@ async function generateBrandAssets(targetDir) {
 function writeManifest(targetDir, browser) {
   const manifest = structuredClone(defaultManifest);
   manifest.icons = iconMap("brand");
-  manifest.action.default_icon = iconMap("idle");
+  manifest.action.default_icon = iconMap("brand");
   manifest.web_accessible_resources = [
     {
       resources: ["assets/brand/*"],
