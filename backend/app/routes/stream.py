@@ -2,11 +2,9 @@
 Endpoint GET /api/stream/<job_id> — streaming SSE de progreso del análisis.
 
 Mantiene la conexión HTTP abierta y envía eventos conforme el orquestador
-los encola en la cola asyncio del job. Cierra la conexión al recibir
-el evento 'complete' o 'analysis_error'.
-
-SSE vs WebSockets: el flujo es unidireccional (servidor → cliente),
-por lo que SSE es suficiente y más simple de implementar y depurar.
+los encola. Cierra la conexión al recibir el evento 'complete' o
+'analysis_error'. Si el cliente se desconecta, el pipeline continúa:
+el análisis debe terminar y persistirse igualmente en biblioteca.
 """
 
 import asyncio
@@ -17,7 +15,6 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
 
-from app.models.job import JobStatus
 from app.store.job_store import JobStore
 
 _logger = logging.getLogger(__name__)
@@ -30,58 +27,7 @@ _SSE_PING_INTERVAL = 15
 _TERMINAL_EVENTS = frozenset({"complete", "analysis_error"})
 
 
-def _drain_queue(queue: asyncio.Queue) -> None:
-    """
-    Vacía la cola SSE de forma no bloqueante.
-
-    Necesario cuando el cliente desconecta para que el orquestador no quede
-    bloqueado esperando que alguien consuma los eventos pendientes.
-
-    Args:
-        queue: Cola asyncio del job a drenar.
-    """
-    while not queue.empty():
-        queue.get_nowait()
-
-
-def _cancel_pipeline_if_no_emails(store: JobStore, job_id: str) -> None:
-    """
-    Cancela el pipeline y elimina el job del store si no hay emails registrados.
-
-    Solo actúa cuando el job sigue en curso: si ya terminó, no hay nada que cancelar.
-    Si hay emails suscritos, el pipeline debe continuar para poder enviar la notificación.
-
-    Args:
-        store: Store de jobs.
-        job_id: Identificador del job a evaluar.
-    """
-    current_job = store.get(job_id)
-    if not current_job or current_job.status in (JobStatus.COMPLETE, JobStatus.ERROR):
-        return
-
-    try:
-        from app.database.notifications_repo import NotificationsRepo
-        notifications = NotificationsRepo().find_by_job(job_id)
-    except Exception:
-        notifications = []
-
-    if not notifications:
-        _logger.info(
-            "Sin emails registrados para job '%s': cancelando pipeline.",
-            job_id,
-        )
-        if current_job.orchestrator_task:
-            current_job.orchestrator_task.cancel()
-        store.remove(job_id)
-    else:
-        _logger.info(
-            "Job '%s' tiene %d emails registrados: pipeline continúa.",
-            job_id,
-            len(notifications),
-        )
-
-
-async def _read_next_sse_frame(queue: asyncio.Queue) -> tuple[str, bool]:
+async def _read_next_sse_frame(store: JobStore, job_id: str) -> tuple[str, bool]:
     """
     Espera el siguiente evento de la cola y lo formatea como frame SSE.
 
@@ -95,23 +41,23 @@ async def _read_next_sse_frame(queue: asyncio.Queue) -> tuple[str, bool]:
         Tupla (frame, is_terminal).
     """
     try:
-        event = await asyncio.wait_for(queue.get(), timeout=_SSE_PING_INTERVAL)
+        event = await store.read_next_event(job_id, _SSE_PING_INTERVAL)
+        if event is None:
+            return ": ping\n\n", False
         payload = json.dumps(event["data"], ensure_ascii=False)
         frame = f"event: {event['type']}\ndata: {payload}\n\n"
         return frame, event["type"] in _TERMINAL_EVENTS
-    except asyncio.TimeoutError:
+    except TimeoutError:
         # Ping SSE estándar: mantiene la conexión viva sin datos reales
         return ": ping\n\n", False
 
 
-async def _sse_generator(
-    queue: asyncio.Queue, store: JobStore, job_id: str
-):
+async def _sse_generator(store: JobStore, job_id: str):
     """
     Generador asíncrono que emite frames SSE hasta que el análisis termina.
 
     Gestiona la desconexión del cliente vía CancelledError: drena la cola
-    y cancela el pipeline si no hay emails suscritos.
+    pendiente del stream, pero no cancela el pipeline.
 
     Args:
         queue: Cola asyncio del job.
@@ -123,17 +69,23 @@ async def _sse_generator(
     """
     try:
         while True:
-            frame, is_terminal = await _read_next_sse_frame(queue)
+            frame, is_terminal = await _read_next_sse_frame(store, job_id)
             yield frame
             if is_terminal:
                 break
+    except GeneratorExit:
+        _logger.info(
+            "Cliente desconectado del stream del job '%s'. Limpiando eventos.",
+            job_id,
+        )
+        store.drain_events(job_id)
+        raise
     except asyncio.CancelledError:
         _logger.info(
             "Cliente desconectado del stream del job '%s'. Drenando cola.",
             job_id,
         )
-        _drain_queue(queue)
-        _cancel_pipeline_if_no_emails(store, job_id)
+        store.drain_events(job_id)
         raise  # propagar para que FastAPI gestione la limpieza HTTP
 
 
@@ -181,15 +133,8 @@ def get_stream_router(store: JobStore, limiter: Limiter) -> APIRouter:
         if job is None:
             raise HTTPException(status_code=404, detail="Job no encontrado")
 
-        if job.queue is None:
-            return StreamingResponse(
-                iter([]),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-            )
-
         return StreamingResponse(
-            _sse_generator(job.queue, store, job_id),
+            _sse_generator(store, job_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

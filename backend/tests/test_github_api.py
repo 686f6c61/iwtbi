@@ -11,7 +11,7 @@ async def test_get_head_sha_returns_sha_on_success():
     """get_head_sha devuelve el SHA cuando la API responde correctamente."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
-    mock_response.text = "abc1234567890abcdef1234567890abcdef123456"
+    mock_response.text = "abc1234567890abcdef1234567890abcdef123456"  # pragma: allowlist secret
 
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -21,7 +21,7 @@ async def test_get_head_sha_returns_sha_on_success():
     with patch("app.services.github_api.httpx.AsyncClient", return_value=mock_client):
         result = await get_head_sha("user/repo")
 
-    assert result == "abc1234567890abcdef1234567890abcdef123456"
+    assert result == "abc1234567890abcdef1234567890abcdef123456"  # pragma: allowlist secret
 
 
 @pytest.mark.asyncio

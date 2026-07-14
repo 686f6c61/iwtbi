@@ -14,12 +14,31 @@ const BACKEND_URL =
   (import.meta as unknown as { env: Record<string, string> }).env
     ?.PUBLIC_BACKEND_URL ?? "http://localhost:8410";
 
+/**
+ * Margen antes de considerar fatal un `EventSource.onerror`.
+ *
+ * El backend emite comentarios SSE `: ping` cada 15s para mantener vivo el
+ * stream, pero los comentarios no llegan como eventos al navegador. Detrás de
+ * proxies/CDNs es normal recibir `onerror` transitorios durante un reconnect.
+ * Damos margen suficiente para que EventSource recupere la conexión antes de
+ * declarar el análisis como interrumpido.
+ */
+const STREAM_ERROR_GRACE_MS = 25_000;
+
 /** Datos del evento emitido cuando un agente completa su sección. */
 export interface AgentEventData {
-  /** Nombre identificador del agente (sherlock, frank, oracle, etc.). */
+  /** Nombre identificador del agente (hopper, kay, liskov, etc.). */
   agent: string;
   /** Sección Markdown generada por el agente. */
   section: string;
+}
+
+/** Datos emitidos cuando un agente no puede completar su sección. */
+export interface AgentErrorEventData {
+  /** Nombre identificador del agente (hopper, kay, liskov, etc.). */
+  agent: string;
+  /** Mensaje legible asociado al fallo del agente. */
+  message: string;
 }
 
 /** Datos de una respuesta cacheada del backend. */
@@ -53,6 +72,8 @@ export interface RepoPreflightData {
     | "repo_size_limit";
   /** Archivos de texto legibles considerados. */
   candidate_files: number;
+  /** Archivos cuyo contenido se midió en detalle tras priorización interna. */
+  measured_candidate_files?: number | null;
   /** Archivos que entrarían al contexto actual. */
   selected_files: number;
   /** Total de caracteres útiles detectados. */
@@ -65,6 +86,12 @@ export interface RepoPreflightData {
   budget_truncated_files: number;
   /** Límite gratuito actual de archivos candidatos permitidos. */
   candidate_file_limit: number;
+  /** Si true, el backend detectó más texto del que midió en detalle. */
+  measurement_limited?: boolean;
+  /** Tamaño bruto estimado del repositorio según GitHub, si el bloqueo vino por MB. */
+  repo_size_kb?: number | null;
+  /** Límite bruto de MB permitido por la plataforma. */
+  repo_size_limit_mb?: number | null;
 }
 
 /** Opciones opcionales para el inicio del análisis. */
@@ -73,6 +100,8 @@ export interface StartAnalysisOptions {
   forceNew?: boolean;
   /** Email para notificación cuando el análisis termine (permite cerrar la pestaña). */
   email?: string;
+  /** Si true, el email queda suscrito a avisos futuros del repo cuando cambie el SHA. */
+  subscribeUpdates?: boolean;
   /** Ticket efímero emitido por el backend para autorizar el análisis. */
   ticket?: string;
 }
@@ -93,6 +122,8 @@ export interface StreamCallbacks {
   onStatus: (status: string) => void;
   /** Llamado cuando un agente completa su sección. */
   onAgent: (data: AgentEventData) => void;
+  /** Llamado cuando un agente falla pero el pipeline continúa. */
+  onAgentError?: (data: AgentErrorEventData) => void;
   /** Llamado cuando el sintetizador produce el documento final completo. */
   onComplete: (document: string) => void;
   /** Llamado si el análisis falla en cualquier fase. */
@@ -113,6 +144,87 @@ function parseEventData(e: Event): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Convierte respuestas de error heterogéneas del backend (string, array de
+ * validación, objetos anidados) en un mensaje corto y legible para la UI.
+ */
+function normalizeErrorMessage(input: unknown, fallback: string): string {
+  if (typeof input === "string") {
+    const text = input.trim();
+    return text || fallback;
+  }
+
+  if (input instanceof Error) {
+    return normalizeErrorMessage(input.message, fallback);
+  }
+
+  if (typeof input === "number" || typeof input === "boolean") {
+    return String(input);
+  }
+
+  if (Array.isArray(input)) {
+    const messages = input
+      .map((item) => normalizeValidationMessage(item))
+      .filter((value): value is string => Boolean(value));
+    return messages[0] ?? fallback;
+  }
+
+  if (input && typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    const nestedMessage =
+      pickNormalizedMessage(record.detail) ??
+      pickNormalizedMessage(record.message) ??
+      pickNormalizedMessage(record.error);
+    return normalizeValidationMessage(record) ?? nestedMessage ?? fallback;
+  }
+
+  return fallback;
+}
+
+function normalizeValidationMessage(input: unknown): string | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const record = input as Record<string, unknown>;
+  const rawMessage =
+    typeof record.msg === "string"
+      ? record.msg
+      : typeof record.message === "string"
+        ? record.message
+        : null;
+
+  if (!rawMessage?.trim()) {
+    return null;
+  }
+
+  const location = Array.isArray(record.loc)
+    ? record.loc
+        .filter((part): part is string | number => typeof part === "string" || typeof part === "number")
+        .join(" > ")
+    : "";
+
+  const normalizedMessage = rawMessage.trim();
+  if (location.endsWith("email")) {
+    return "El email no es válido. Revísalo e inténtalo de nuevo.";
+  }
+
+  if (location.endsWith("url")) {
+    return "La URL del repositorio no es válida. Usa un repositorio público de GitHub.";
+  }
+
+  if (/field required/i.test(normalizedMessage)) {
+    return "Falta un dato obligatorio para iniciar el análisis.";
+  }
+
+  return normalizedMessage;
+}
+
+function pickNormalizedMessage(input: unknown): string | null {
+  const message = normalizeErrorMessage(input, "");
+  return message.trim() ? message : null;
 }
 
 /**
@@ -172,7 +284,7 @@ export async function measureRepositoryContext(
     const err = await response
       .json()
       .catch(() => ({ detail: "No se pudo medir el repositorio" }));
-    throw new Error(err.detail ?? "No se pudo medir el repositorio");
+    throw new Error(normalizeErrorMessage(err, "No se pudo medir el repositorio"));
   }
 
   return (await response.json()) as RepoPreflightData;
@@ -225,6 +337,7 @@ export async function startAnalysis(
         url: repoUrl,
         force_new: options.forceNew ?? false,
         email: options.email ?? null,
+        subscribe_updates: options.subscribeUpdates ?? false,
       }),
     });
 
@@ -232,7 +345,7 @@ export async function startAnalysis(
       const err = await response
         .json()
         .catch(() => ({ detail: "Error desconocido" }));
-      callbacks.onError(err.detail ?? "Error al iniciar el análisis");
+      callbacks.onError(normalizeErrorMessage(err, "Error al iniciar el análisis"));
       return { accepted: false, cached: false, cancel: () => {} };
     }
 
@@ -261,14 +374,41 @@ export async function startAnalysis(
   // Paso 2b: Análisis nuevo — abrir el stream SSE
   const streamUrl = `${BACKEND_URL}${responseData.stream_url as string}`;
   const source = new EventSource(streamUrl);
+  let settled = false;
+  let reconnectErrorTimer: number | null = null;
+
+  function clearReconnectErrorTimer() {
+    if (reconnectErrorTimer === null) {
+      return;
+    }
+    window.clearTimeout(reconnectErrorTimer);
+    reconnectErrorTimer = null;
+  }
+
+  function markStreamHealthy() {
+    clearReconnectErrorTimer();
+  }
+
+  function failInterruptedConnection() {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    clearReconnectErrorTimer();
+    callbacks.onError("Conexión interrumpida con el servidor");
+    source.close();
+  }
 
   source.addEventListener("status", (e: Event) => {
     const data = parseEventData(e);
     if (!data) {
+      settled = true;
+      clearReconnectErrorTimer();
       callbacks.onError("Respuesta inesperada del servidor (status)");
       source.close();
       return;
     }
+    markStreamHealthy();
     callbacks.onStatus(data.status as string);
   });
 
@@ -279,16 +419,31 @@ export async function startAnalysis(
       console.error("[stream-client] JSON inválido en evento 'agent'");
       return;
     }
+    markStreamHealthy();
     callbacks.onAgent(data as unknown as AgentEventData);
+  });
+
+  source.addEventListener("agent_error", (e: Event) => {
+    const data = parseEventData(e);
+    if (!data) {
+      console.error("[stream-client] JSON inválido en evento 'agent_error'");
+      return;
+    }
+    markStreamHealthy();
+    callbacks.onAgentError?.(data as unknown as AgentErrorEventData);
   });
 
   source.addEventListener("complete", (e: Event) => {
     const data = parseEventData(e);
     if (!data) {
+      settled = true;
+      clearReconnectErrorTimer();
       callbacks.onError("Respuesta inesperada del servidor (complete)");
       source.close();
       return;
     }
+    settled = true;
+    clearReconnectErrorTimer();
     callbacks.onComplete(data.document as string);
     source.close();
   });
@@ -298,21 +453,49 @@ export async function startAnalysis(
   // de EventSource, que se dispara ante fallos de conexión de red.
   source.addEventListener("analysis_error", (e: Event) => {
     const data = parseEventData(e);
+    settled = true;
+    clearReconnectErrorTimer();
     callbacks.onError(
-      (data?.message as string) ?? "Error durante el análisis"
+      normalizeErrorMessage(data?.message ?? data, "Error durante el análisis")
     );
     source.close();
   });
 
   // Errores de red / conexión perdida (evento nativo de EventSource)
   source.onerror = () => {
-    callbacks.onError("Conexión interrumpida con el servidor");
-    source.close();
+    if (settled) {
+      return;
+    }
+
+    // EventSource reintenta automáticamente. Solo cerramos si no ha
+    // conseguido volver a OPEN tras un margen prudente.
+    if (reconnectErrorTimer !== null) {
+      return;
+    }
+
+    reconnectErrorTimer = window.setTimeout(() => {
+      reconnectErrorTimer = null;
+      if (settled) {
+        return;
+      }
+      if (source.readyState === EventSource.OPEN) {
+        return;
+      }
+      if (source.readyState === EventSource.CONNECTING) {
+        failInterruptedConnection();
+        return;
+      }
+      failInterruptedConnection();
+    }, STREAM_ERROR_GRACE_MS);
   };
 
   return {
     accepted: true,
     cached: false,
-    cancel: () => source.close(),
+    cancel: () => {
+      settled = true;
+      clearReconnectErrorTimer();
+      source.close();
+    },
   };
 }

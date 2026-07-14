@@ -1,5 +1,6 @@
 """Tests para los modelos de dominio: Job, AgentEvent y RepoContext."""
 
+from app.config import Settings
 from app.models.job import Job, JobStatus, AgentEvent
 from app.models.repo_context import RepoContext
 
@@ -13,9 +14,9 @@ def test_job_initial_status():
 
 def test_agent_event_serialization():
     """AgentEvent debe serializar correctamente agent y section."""
-    event = AgentEvent(agent="sherlock", section="## Stack\n\nPython 3.12")
+    event = AgentEvent(agent="hopper", section="## Stack\n\nPython 3.12")
     data = event.model_dump()
-    assert data["agent"] == "sherlock"
+    assert data["agent"] == "hopper"
     assert "Stack" in data["section"]
 
 
@@ -34,3 +35,19 @@ def test_repo_context_as_text_contains_tree():
     text = ctx.as_text
     assert "main.py" in text
     assert "x = 1" in text
+
+
+def test_settings_blank_preflight_limit_uses_default():
+    """Un valor opcional vacío no debe romper el arranque."""
+    cfg = Settings(_env_file=None, preflight_max_candidate_files="")
+    assert cfg.preflight_max_candidate_files == 2500
+
+
+def test_settings_clamps_preflight_limit_to_max_files():
+    """La UI no debe anunciar un límite superior al que el lector puede medir."""
+    cfg = Settings(
+        _env_file=None,
+        max_files=2000,
+        preflight_max_candidate_files=2500,
+    )
+    assert cfg.preflight_max_candidate_files == 2000

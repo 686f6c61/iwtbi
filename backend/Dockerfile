@@ -25,13 +25,15 @@ RUN pip install --no-cache-dir .
 # Sobreescribe el stub con el código fuente real.
 # Esta capa se invalida solo cuando cambia app/, sin reinstalar dependencias.
 COPY app/ ./app/
+COPY postgres/ ./postgres/
 
 # Crear usuario no privilegiado antes de arrancar el proceso.
 # En producción el backend usa el /tmp interno del contenedor para clonar
 # repositorios temporales, evitando depender de permisos del host.
-RUN addgroup --system app && adduser --system --ingroup app app
+RUN addgroup --system app \
+    && adduser --system --ingroup app app
 USER app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]

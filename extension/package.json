@@ -1,0 +1,13 @@
+{
+  "name": "iwtbi-extension",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./build.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3"
+  }
+}

@@ -1,12 +1,40 @@
 name: iwtbi
 
 services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-iwtbi}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - iwtbi_postgres:/var/lib/postgresql
+      - ./backend/postgres/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?set POSTGRES_USER} -d ${POSTGRES_DB:-iwtbi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        PUBLIC_BACKEND_URL: ${PUBLIC_BACKEND_URL:-https://api.example.com}
+        PUBLIC_BACKEND_URL: ${PUBLIC_BACKEND_URL:?set PUBLIC_BACKEND_URL}
+        PUBLIC_APP_URL: ${PUBLIC_APP_URL:?set PUBLIC_APP_URL}
+        PUBLIC_AUTHOR_URL: ${PUBLIC_AUTHOR_URL:-}
+        PUBLIC_AUTHOR_LABEL: ${PUBLIC_AUTHOR_LABEL:-}
+        PUBLIC_SOURCE_URL: ${PUBLIC_SOURCE_URL:-}
+        PUBLIC_SOCIAL_HANDLE: ${PUBLIC_SOCIAL_HANDLE:-}
+        PUBLIC_LINKEDIN_URL: ${PUBLIC_LINKEDIN_URL:-}
+        PUBLIC_EXTENSION_DOWNLOADS_ENABLED: ${PUBLIC_EXTENSION_DOWNLOADS_ENABLED:-false}
     restart: unless-stopped
     depends_on:
       backend:
@@ -26,7 +54,22 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - ${IWTBI_ENV_FILE:-.env}
+      - path: ${IWTBI_ENV_FILE:-.env}
+        required: false
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-iwtbi}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      BIBLIOTECA_RATE_LIMIT: ${BIBLIOTECA_RATE_LIMIT:-60/minute}
+      JOB_STORE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     ports:
       - "127.0.0.1:${IWTBI_BACKEND_PORT:-8410}:8000"
     healthcheck:
@@ -35,3 +78,25 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - path: ${IWTBI_ENV_FILE:-.env}
+        required: false
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-iwtbi}
+      JOB_STORE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+volumes:
+  iwtbi_postgres:

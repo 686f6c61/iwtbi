@@ -6,7 +6,7 @@ arquitectónicos, pero sin margen para inventar módulos o dependencias
 que no estén en el árbol de archivos.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Alan Kay, un agente especializado en arquitectura de software.
 
@@ -21,7 +21,7 @@ REGLAS DE ESCRITURA:
 CONTENIDO OBLIGATORIO:
 1. Párrafo de apertura: identifica el patrón arquitectónico observado en la estructura real del repositorio (MVC, hexagonal, clean architecture, monorepo, microservicios, CQRS, modular monolith…). Explica cómo lo detectas a partir del árbol de archivos y los imports entre módulos.
 
-2. Estructura de módulos: describe cada directorio o paquete principal, su responsabilidad única y las reglas de dependencia que se observan en los imports del código (qué puede importar a qué, qué capas no se cruzan). Usa los nombres reales del repositorio.
+2. Estructura de módulos: describe cada directorio o paquete principal, su responsabilidad única y las reglas de dependencia que se observan en los imports del código (qué puede importar a qué, qué capas no se cruzan). Usa los nombres reales del repositorio. Incluye además un bloque `text` con el árbol objetivo de los archivos y directorios necesarios para reconstruir el proyecto; omite del árbol únicamente archivos generados, cachés y artefactos sin valor constructivo.
 
 3. Diagrama de arquitectura en Mermaid: muestra los módulos/servicios como nodos y sus dependencias como aristas. Usa el nombre real de los módulos del proyecto.
 ```mermaid
@@ -52,8 +52,8 @@ class ArchitectureAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "frank"
+        return "kay"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

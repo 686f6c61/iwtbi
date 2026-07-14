@@ -25,6 +25,7 @@ Seguridad:
 """
 
 import logging
+import heapq
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -94,12 +95,16 @@ class ContextEstimate:
     Resumen cuantitativo del contexto útil de un repositorio.
 
     Attributes:
-        candidate_files: Archivos de texto legibles considerados.
+        candidate_files: Total de archivos de texto analizables detectados.
+        measured_candidate_files: Archivos candidatos cuya señal se midió en detalle.
         selected_files: Archivos que caben dentro del presupuesto global.
-        total_candidate_chars: Suma de caracteres útiles de todos los candidatos.
+        total_candidate_chars: Suma de caracteres útiles de los candidatos
+                              medidos en detalle.
         selected_chars: Caracteres que entrarían realmente al contexto.
         oversized_files: Archivos truncados por el límite por archivo.
         budget_truncated_files: Archivos truncados por el límite global.
+        measurement_limited: True si hubo más candidatos que el tope interno
+                             y se midió solo la parte más informativa.
     """
 
     candidate_files: int
@@ -108,6 +113,8 @@ class ContextEstimate:
     selected_chars: int
     oversized_files: int
     budget_truncated_files: int
+    measured_candidate_files: int | None = None
+    measurement_limited: bool = False
 
 
 def _score_file(path: Path, root: Path) -> int:
@@ -170,9 +177,9 @@ class FileReader:
 
     def __init__(
         self,
-        max_files: int = 2000,
+        max_files: int = 2500,
         file_size_limit_kb: int = 500,
-        max_context_chars: int = 80_000,
+        max_context_chars: int = 120_000,
     ) -> None:
         self._max_files = max_files
         self._file_size_limit_bytes = file_size_limit_kb * 1024
@@ -191,7 +198,7 @@ class FileReader:
         Returns:
             RepoContext con árbol ASCII y diccionario de contenidos.
         """
-        tree_lines, candidates = self._discover_candidates(repo_path)
+        tree_lines, candidates, _ = self._discover_candidates(repo_path)
 
         # Ordenar candidatos por puntuación descendente y seleccionar
         # hasta agotar el presupuesto de caracteres
@@ -214,25 +221,42 @@ class FileReader:
         pero devuelve métricas para decidir si el análisis puede ser completo,
         optimizado o si conviene bloquearlo por tamaño.
         """
-        _, candidates = self._discover_candidates(repo_path)
-        candidates.sort(key=lambda p: _score_file(p, repo_path), reverse=True)
-        return self._estimate_selection(candidates)
+        _, candidates, total_text_files = self._discover_candidates(repo_path)
+        return self._estimate_selection(
+            candidates,
+            discovered_candidate_files=total_text_files,
+        )
 
-    def _discover_candidates(self, repo_path: Path) -> tuple[list[str], list[Path]]:
+    def _discover_candidates(
+        self,
+        repo_path: Path,
+    ) -> tuple[list[str], list[Path], int]:
         """
         Recorre el repo y devuelve el árbol ASCII junto con los candidatos.
+
+        Cuenta todos los archivos de texto detectados, pero conserva solo los
+        ``max_files`` más informativos para lectura/estimación detallada.
         """
         tree_lines: list[str] = []
-        candidates: list[Path] = []
-        self._walk_tree(repo_path, repo_path, tree_lines, candidates, "")
-        return tree_lines, candidates
+        candidate_heap: list[tuple[int, int, Path]] = []
+        stats = {"text_files": 0, "order": 0}
+        self._walk_tree(repo_path, repo_path, tree_lines, candidate_heap, stats, "")
+        candidates = [
+            path
+            for _, _, path in sorted(
+                candidate_heap,
+                key=lambda item: (-item[0], item[1], str(item[2])),
+            )
+        ]
+        return tree_lines, candidates, stats["text_files"]
 
     def _walk_tree(
         self,
         root: Path,
         current: Path,
         tree_lines: list[str],
-        candidates: list[Path],
+        candidate_heap: list[tuple[int, int, Path]],
+        stats: dict[str, int],
         prefix: str,
     ) -> None:
         """
@@ -253,7 +277,14 @@ class FileReader:
             connector = "└── " if is_last else "├── "
             extension = "    " if is_last else "│   "
             self._process_entry(
-                entry, root, tree_lines, candidates, prefix, connector, extension
+                entry,
+                root,
+                tree_lines,
+                candidate_heap,
+                stats,
+                prefix,
+                connector,
+                extension,
             )
 
     def _process_entry(
@@ -261,7 +292,8 @@ class FileReader:
         entry: Path,
         root: Path,
         tree_lines: list[str],
-        candidates: list[Path],
+        candidate_heap: list[tuple[int, int, Path]],
+        stats: dict[str, int],
         prefix: str,
         connector: str,
         extension: str,
@@ -285,11 +317,47 @@ class FileReader:
         if entry.is_dir():
             if entry.name not in EXCLUDED_DIRS:
                 tree_lines.append(f"{prefix}{connector}{entry.name}/")
-                self._walk_tree(root, entry, tree_lines, candidates, prefix + extension)
+                self._walk_tree(
+                    root,
+                    entry,
+                    tree_lines,
+                    candidate_heap,
+                    stats,
+                    prefix + extension,
+                )
         elif entry.is_file():
             tree_lines.append(f"{prefix}{connector}{entry.name}")
-            if len(candidates) < self._max_files and self._is_text_file(entry):
-                candidates.append(entry)
+            if self._is_text_file(entry):
+                stats["text_files"] += 1
+                self._remember_candidate(entry, root, candidate_heap, stats["order"])
+                stats["order"] += 1
+
+    def _remember_candidate(
+        self,
+        path: Path,
+        root: Path,
+        candidate_heap: list[tuple[int, int, Path]],
+        order: int,
+    ) -> None:
+        """
+        Conserva los ``max_files`` archivos más informativos del repo.
+
+        Esto evita sesgos por orden del recorrido: si el repo tiene muchos
+        ficheros, preferimos quedarnos con README, configs y entradas reales
+        aunque aparezcan más tarde que cientos de tests o fixtures.
+        """
+        if self._max_files <= 0:
+            return
+
+        score = _score_file(path, root)
+        item = (score, order, path)
+        if len(candidate_heap) < self._max_files:
+            heapq.heappush(candidate_heap, item)
+            return
+
+        lowest_score, lowest_order, _ = candidate_heap[0]
+        if score > lowest_score or (score == lowest_score and order < lowest_order):
+            heapq.heapreplace(candidate_heap, item)
 
     def _select_files(self, candidates: list[Path], root: Path) -> dict[str, str]:
         """
@@ -332,11 +400,17 @@ class FileReader:
 
         return files
 
-    def _estimate_selection(self, candidates: list[Path]) -> ContextEstimate:
+    def _estimate_selection(
+        self,
+        candidates: list[Path],
+        *,
+        discovered_candidate_files: int,
+    ) -> ContextEstimate:
         """
         Replica la selección de contexto y devuelve métricas de cobertura.
         """
-        candidate_files = 0
+        candidate_files = discovered_candidate_files
+        measured_candidate_files = len(candidates)
         selected_files = 0
         total_candidate_chars = 0
         selected_chars = 0
@@ -348,7 +422,6 @@ class FileReader:
             if content is None:
                 continue
 
-            candidate_files += 1
             total_candidate_chars += len(content)
             if oversized:
                 oversized_files += 1
@@ -366,11 +439,13 @@ class FileReader:
 
         return ContextEstimate(
             candidate_files=candidate_files,
+            measured_candidate_files=measured_candidate_files,
             selected_files=selected_files,
             total_candidate_chars=total_candidate_chars,
             selected_chars=selected_chars,
             oversized_files=oversized_files,
             budget_truncated_files=budget_truncated_files,
+            measurement_limited=candidate_files > measured_candidate_files,
         )
 
     def _is_text_file(self, path: Path) -> bool:
@@ -401,14 +476,16 @@ class FileReader:
             por archivo.
         """
         try:
-            raw = path.read_bytes()
+            read_limit = max(self._file_size_limit_bytes + 1, 512)
+            with path.open("rb") as handle:
+                raw = handle.read(read_limit)
             if b"\x00" in raw[:512]:
                 return None, False
-            text = raw.decode("utf-8", errors="replace")
             oversized = len(raw) > self._file_size_limit_bytes
+            content_bytes = raw[:self._file_size_limit_bytes] if oversized else raw
+            text = content_bytes.decode("utf-8", errors="replace")
             if oversized:
-                limit_chars = self._file_size_limit_bytes
-                text = text[:limit_chars] + "\n\n[... archivo truncado por límite de tamaño ...]"
+                text += "\n\n[... archivo truncado por límite de tamaño ...]"
             return text, oversized
         except OSError as exc:
             _logger.warning("No se pudo leer '%s': %s", path, exc)

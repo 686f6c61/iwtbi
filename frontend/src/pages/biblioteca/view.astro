@@ -18,7 +18,13 @@
 import Layout from "../../layouts/Layout.astro";
 ---
 
-<Layout title="Análisis — Biblioteca" activeLink="biblioteca">
+<Layout
+  title="Análisis guardado"
+  description="Documento técnico generado por IWTBI a partir de un repositorio público de GitHub."
+  keywords="análisis guardado repositorio, documento técnico github, biblioteca IWTBI"
+  noindex={true}
+  activeLink="biblioteca"
+>
 
   <!-- ── Barra de búsqueda / re-análisis ─────────────────────────────────── -->
   <div class="view-search-row">
@@ -71,96 +77,16 @@ import Layout from "../../layouts/Layout.astro";
 </Layout>
 
 <script>
-  import { marked, type Renderer } from "marked";
-  import DOMPurify from "dompurify";
-  import mermaid from "mermaid";
-
   const BACKEND_URL =
     (import.meta as unknown as { env: Record<string, string> }).env
       ?.PUBLIC_BACKEND_URL ?? "http://localhost:8410";
+  let markdownRendererPromise:
+    | Promise<typeof import("../../scripts/render-markdown")>
+    | null = null;
 
-  // ── Configuración de marked ────────────────────────────────────────────────
-  // Renderer personalizado: bloques ```mermaid``` → <div class="mermaid">
-  const renderer: Partial<Renderer> = {
-    code({ text, lang }) {
-      if (lang === "mermaid") {
-        // No escapamos el contenido mermaid: DOMPurify preserva los text nodes
-        // tal cual y mermaid los lee via textContent. El normalizador corrige
-        // tipos SQL que mermaid 11 rechaza.
-        const normalized = normalizeMermaidSource(text);
-        const escaped = normalized
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-        return `<div class="mermaid">${escaped}</div>`;
-      }
-      const escaped = text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      return `<pre><code class="language-${lang ?? ""}">${escaped}</code></pre>`;
-    },
-  };
-  marked.use({ renderer });
-
-  // ── DOMPurify: permite SVG para los diagramas Mermaid ─────────────────────
-  const purifyConfig: DOMPurify.Config = {
-    ADD_TAGS: [
-      "svg", "use", "path", "circle", "rect", "line",
-      "polyline", "polygon", "text", "tspan", "g", "defs",
-      "marker", "foreignObject",
-    ],
-    ADD_ATTR: [
-      "viewBox", "xmlns", "d", "fill", "stroke", "stroke-width",
-      "transform", "x", "y", "width", "height", "cx", "cy", "r",
-      "points", "marker-end", "class", "id", "style",
-    ],
-  };
-
-  // ── Mermaid ────────────────────────────────────────────────────────────────
-  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
-
-  /**
-   * Normaliza el source de un bloque mermaid generado por LLMs.
-   *
-   * Los agentes tienden a usar tipos de datos SQL (integer, timestamp, bytea…)
-   * dentro de erDiagram. Mermaid 11 sólo acepta identificadores alfanuméricos
-   * sin espacios. Reemplazamos los más habituales para maximizar el éxito del render.
-   */
-  /**
-   * Normaliza el source de un bloque mermaid generado por LLMs para maximizar
-   * la compatibilidad con mermaid 11.x, que es más estricto que versiones anteriores.
-   *
-   * Correcciones aplicadas:
-   * - Tipos SQL (integer, timestamp, bytea…) → tipos mermaid (int, datetime, blob…)
-   *   Los agentes usan el vocabulario de PostgreSQL dentro de erDiagram.
-   * - @ en labels de nodos de flowchart: [@dnd-kit] → [dnd-kit]
-   *   El símbolo @ no está permitido en texto de nodos en mermaid 11.
-   * - / en labels de relaciones erDiagram: "ejecuta/recibe" → "ejecuta-recibe"
-   *   La barra provoca un error de parse en el analizador léxico de erDiagram.
-   */
-  function normalizeMermaidSource(src: string): string {
-    return src
-      // Tipos SQL → tipos mermaid (erDiagram)
-      .replace(/\binteger\b/g, "int")
-      .replace(/\btimestamp\b/g, "datetime")
-      .replace(/\bbytea\b/g, "blob")
-      .replace(/\bjsonb?\b/g, "string")
-      .replace(/\btext\b/g, "string")
-      .replace(/\bboolean\b/g, "bool")
-      .replace(/\bbigint\b/g, "int")
-      .replace(/\bnumeric\b/g, "float")
-      // @ dentro de labels de nodo: [texto@paquete] → [texto paquete]
-      .replace(/\[([^\]]*?)@([^\]]*?)\]/g, (_m, pre, post) => `[${(pre + post).trim() || "?"}]`)
-      // / dentro de labels de nodo de flowchart: [tailwindcss/postcss] → [tailwindcss-postcss]
-      .replace(/\[([^\]]*?)\/([^\]]*?)\]/g, (_m, pre, post) => `[${pre}-${post}]`)
-      // / dentro de labels de relación erDiagram: "ejecuta/recibe" → "ejecuta-recibe"
-      .replace(/:\s*"([^"]*?)\/([^"]*?)"/g, (_m, pre, post) => `: "${pre}-${post}"`)
-      // espacios dentro de labels de relación erDiagram: "puede ser" → "puede-ser"
-      .replace(/:\s*"([^"]+)"/g, (_m, label) => `: "${label.replace(/\s+/g, "-")}"`)
-      // doble constraint en atributos erDiagram: "PK FK" → "FK", "FK PK" → "FK", etc.
-      // Mermaid 11 solo acepta un constraint por atributo; el segundo token causa parse error.
-      .replace(/\b(PK|FK|UK)\s+(PK|FK|UK)\b/g, (_m, _first, second) => second);
+  function getMarkdownRenderer() {
+    markdownRendererPromise ??= import("../../scripts/render-markdown");
+    return markdownRendererPromise;
   }
 
   // ── Agentes del pipeline (en el orden en que se ejecutan) ─────────────────
@@ -194,7 +120,7 @@ import Layout from "../../layouts/Layout.astro";
 
   /**
    * Renderiza el sidebar de agentes con los 7 agentes completados (verde)
-   * y el sintetizador (coral). Dado que el análisis está guardado, todos
+   * y la integradora (coral). Dado que el análisis está guardado, todos
    * los agentes han completado su trabajo con éxito.
    */
   function renderAgents() {
@@ -232,7 +158,7 @@ import Layout from "../../layouts/Layout.astro";
     sep.className = "agents-sep";
     list.appendChild(sep);
 
-    // Sintetizador
+    // Integradora
     const synthItem = document.createElement("div");
     synthItem.className = "agent-item agent-synth";
 
@@ -245,11 +171,11 @@ import Layout from "../../layouts/Layout.astro";
 
     const synthLabel = document.createElement("span");
     synthLabel.className = "agent-label";
-    synthLabel.textContent = "Tim Berners-Lee";
+    synthLabel.textContent = "Margaret Hamilton";
 
     const synthRole = document.createElement("span");
     synthRole.className = "agent-role";
-    synthRole.textContent = "Integrador";
+    synthRole.textContent = "Integración y validación";
 
     synthInfo.appendChild(synthLabel);
     synthInfo.appendChild(synthRole);
@@ -267,11 +193,12 @@ import Layout from "../../layouts/Layout.astro";
     repoDisplay.textContent = `github.com/${repo}`;
 
     const repoUrl = `https://github.com/${repo}`;
+    const analyzeHref = `/analyze?url=${encodeURIComponent(repoUrl)}&force=true`;
     const reanalyzeBtn = document.getElementById("reanalyze-btn") as HTMLAnchorElement;
-    reanalyzeBtn.href = `/?url=${encodeURIComponent(repoUrl)}`;
+    reanalyzeBtn.href = analyzeHref;
 
     const reanalyzeLink = document.getElementById("reanalyze-link") as HTMLAnchorElement;
-    reanalyzeLink.href = `/?url=${encodeURIComponent(repoUrl)}&force=true`;
+    reanalyzeLink.href = analyzeHref;
 
     // Obtener el análisis del backend
     let entry: Record<string, unknown>;
@@ -300,41 +227,8 @@ import Layout from "../../layouts/Layout.astro";
     // Renderizar sidebar de agentes
     renderAgents();
 
-    // Convertir Markdown → HTML → sanitizar → insertar
-    const rawHtml  = await marked.parse(markdown);
-    const safeHtml = DOMPurify.sanitize(rawHtml, purifyConfig);
-
-    const prose = document.createElement("div");
-    prose.className = "prose";
-    // El HTML ha sido sanitizado con DOMPurify antes de asignarse a innerHTML
-    prose.innerHTML = safeHtml;
-    while (docBody.firstChild) docBody.removeChild(docBody.firstChild);
-    docBody.appendChild(prose);
-
-    // Renderizar diagramas Mermaid, uno a uno para aislar errores.
-    // mermaid.run() no lanza excepciones: en caso de error dibuja un SVG
-    // con el texto "Syntax error in text". Detectamos ese caso y reemplazamos
-    // el diagrama fallido por su código fuente en un bloque <pre>.
-    const mermaidNodes = prose.querySelectorAll<HTMLElement>(".mermaid");
-    for (const node of mermaidNodes) {
-      const source = node.textContent ?? "";
-      try {
-        await mermaid.run({ nodes: [node] });
-      } catch {
-        // En el raro caso de que mermaid lance una excepción real
-      }
-      const hasSyntaxError = Array.from(node.querySelectorAll("text")).some(
-        (t) => t.textContent?.includes("Syntax error")
-      );
-      if (hasSyntaxError) {
-        const pre = document.createElement("pre");
-        const code = document.createElement("code");
-        code.textContent = source;
-        pre.appendChild(code);
-        pre.className = "mermaid-error";
-        node.replaceWith(pre);
-      }
-    }
+    const { renderMarkdownInto } = await getMarkdownRenderer();
+    await renderMarkdownInto(docBody, markdown, "prose");
 
     // Activar botones de copiar y descargar
     const copyBtn = document.getElementById("copy-btn") as HTMLButtonElement;
@@ -473,6 +367,9 @@ import Layout from "../../layouts/Layout.astro";
     padding: 16px 56px 24px;
     flex: 1;
     align-items: flex-start;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
   }
 
   /* ── Sidebar de agentes ── */
@@ -739,6 +636,65 @@ import Layout from "../../layouts/Layout.astro";
   .prose .mermaid svg {
     max-width: 100%;
     height: auto;
+    display: block;
+    margin: 0 auto;
+    color: var(--dark);
+    background: transparent;
+  }
+  .prose .mermaid-scrollable {
+    text-align: left;
+  }
+  .prose .mermaid-scrollable svg {
+    margin: 0;
+  }
+  .prose .mermaid svg .node rect,
+  .prose .mermaid svg .node circle,
+  .prose .mermaid svg .node ellipse,
+  .prose .mermaid svg .node polygon,
+  .prose .mermaid svg .node path,
+  .prose .mermaid svg .cluster rect,
+  .prose .mermaid svg .actor,
+  .prose .mermaid svg .entityBox,
+  .prose .mermaid svg .attributeBoxOdd,
+  .prose .mermaid svg .attributeBoxEven,
+  .prose .mermaid svg .classGroup rect {
+    fill: #fffaf7;
+    stroke: var(--black);
+    stroke-width: 2px;
+  }
+  .prose .mermaid svg .edgeLabel,
+  .prose .mermaid svg .label,
+  .prose .mermaid svg .nodeLabel,
+  .prose .mermaid svg .messageText,
+  .prose .mermaid svg .loopText,
+  .prose .mermaid svg .label text,
+  .prose .mermaid svg text {
+    fill: var(--dark);
+    color: var(--dark);
+  }
+  .prose .mermaid svg .node .label text,
+  .prose .mermaid svg .node .label tspan,
+  .prose .mermaid svg .cluster .label text,
+  .prose .mermaid svg .cluster .label tspan {
+    text-anchor: middle;
+  }
+  .prose .mermaid svg .edgeLabel rect,
+  .prose .mermaid svg .labelBkg,
+  .prose .mermaid svg .relationshipLabelBox {
+    fill: #fafafa;
+    stroke: none;
+  }
+  .prose .mermaid svg .edgePath .path,
+  .prose .mermaid svg .flowchart-link,
+  .prose .mermaid svg .messageLine0,
+  .prose .mermaid svg .messageLine1,
+  .prose .mermaid svg .relation {
+    stroke: var(--black);
+    fill: none;
+  }
+  .prose .mermaid svg .arrowMarkerPath {
+    fill: var(--black);
+    stroke: var(--black);
   }
 
   /* Fallback para diagramas Mermaid que no se pueden renderizar.
@@ -771,14 +727,55 @@ import Layout from "../../layouts/Layout.astro";
       padding-left: 20px;
       padding-right: 20px;
     }
-    .view-main { flex-direction: column; }
-    .view-sidebar { width: 100%; position: static; }
-    .doc-title { font-size: 0.9rem; }
+    .view-main {
+      flex-direction: column;
+      gap: 16px;
+      align-items: stretch;
+    }
+    .view-sidebar {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      position: static;
+      display: block;
+      padding: 8px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      box-shadow: 3px 3px 0 var(--black);
+    }
+    .sidebar-title { display: none; }
+    .agents-list {
+      flex-direction: row;
+      min-width: max-content;
+    }
+    .agent-item {
+      min-width: 132px;
+      padding: 6px 8px;
+    }
+    .agent-role { display: none; }
+    .agents-sep { display: none; }
+    .view-doc-area { width: 100%; }
+    .doc-title {
+      font-size: 0.9rem;
+      white-space: normal;
+      overflow: visible;
+      overflow-wrap: anywhere;
+    }
   }
 
   @media (max-width: 640px) {
+    .doc-header {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .doc-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
     .doc-body {
-      padding: 20px 20px;
+      padding: 18px 16px;
     }
     .view-search-row {
       padding: 0 20px;

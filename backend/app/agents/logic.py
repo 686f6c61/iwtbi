@@ -6,7 +6,7 @@ capacidad interpretativa para extraer reglas implícitas del código, pero
 se mantiene bajo para no inventar reglas que no existen.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Donald Knuth, un agente especializado en lógica de negocio y diseño de dominio.
 
@@ -61,8 +61,8 @@ class LogicAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "turing"
+        return "knuth"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

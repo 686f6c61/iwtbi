@@ -1,8 +1,42 @@
 ---
 import Layout from "../layouts/Layout.astro";
+
+const INDEX_DESCRIPTION =
+  "Convierte cualquier repositorio público de GitHub en documentación exhaustiva y accionable para reconstruirlo con Claude Code, Gemini CLI o Codex CLI.";
+const INDEX_KEYWORDS =
+  "analizar repositorio github, documentación automática repositorio, reconstruir app con ia, claude code, gemini cli, codex cli, reverse engineering repo";
+const APP_URL = (import.meta.env.PUBLIC_APP_URL ?? "http://localhost:3410").replace(/\/+$/, "");
+const APP_HOST = new URL(APP_URL).host;
+const HOME_STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "IWTBI",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Web",
+  url: APP_URL,
+  description: INDEX_DESCRIPTION,
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "EUR",
+  },
+  featureList: [
+    "Análisis automático de repositorios públicos de GitHub",
+    "Documento técnico listo para reconstruir el proyecto",
+    "Vista en tiempo real del progreso de agentes especializados",
+    "Biblioteca reutilizable de análisis guardados",
+  ],
+};
 ---
 
-<Layout title="De URL a prompt" navCtaText="Analizar repo" navCtaHref="/analyze">
+<Layout
+  title="De repo a tracción"
+  description={INDEX_DESCRIPTION}
+  keywords={INDEX_KEYWORDS}
+  structuredData={HOME_STRUCTURED_DATA}
+  navCtaText="Analizar repo"
+  navCtaHref="/analyze"
+>
 
   <!-- Hero: dos columnas -->
   <main>
@@ -10,7 +44,7 @@ import Layout from "../layouts/Layout.astro";
       <!-- Columna izquierda: copy + formulario -->
       <div class="hero-left">
         <span class="eyebrow-tag"><span class="ini">I</span> <span class="ini">W</span>ant <span class="ini">T</span>o <span class="ini">B</span>uild <span class="ini">I</span>t!</span>
-        <h1>De repo a prompt.<br />Listo para construir.</h1>
+        <h1>De repo a tracción.</h1>
         <p class="hero-desc">
           Analiza cualquier repo público y genera un documento exhaustivo para
           reconstruirlo con Claude, Gemini o Codex CLI.
@@ -28,7 +62,7 @@ import Layout from "../layouts/Layout.astro";
         </form>
 
         <p class="hint">
-          Magic URL &rarr;&nbsp;cambia <span class="hint-url">github.com</span> por <span class="hint-url">app.example.com</span>
+          Magic URL &rarr;&nbsp;cambia <span class="hint-url">github.com</span> por <span class="hint-url">{APP_HOST}</span>
         </p>
         <p id="error-msg" class="error hidden"></p>
       </div>
@@ -67,7 +101,7 @@ import Layout from "../layouts/Layout.astro";
               <span class="chip chip-gray">pendiente</span>
             </div>
             <div class="preview-agent">
-              <span class="agent-name">Tim Berners-Lee</span>
+              <span class="agent-name">Margaret Hamilton</span>
               <span class="chip chip-gray">pendiente</span>
             </div>
           </div>

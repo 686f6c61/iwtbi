@@ -48,7 +48,7 @@ The FastAPI app exposes:
   "selected_chars": 25193,
   "oversized_files": 0,
   "budget_truncated_files": 0,
-  "candidate_file_limit": 750
+  "candidate_file_limit": 2500
 }
 ```
 
@@ -159,6 +159,6 @@ The application uses layered controls:
 - origin checks at the reverse proxy for write endpoints
 - one-shot tickets tied to client fingerprint data
 - per-endpoint rate limits
-- no direct frontend access to Supabase
+- no direct frontend access to PostgreSQL or database credentials
 
 Public library reads remain open by design.

@@ -5,7 +5,7 @@ Temperatura 0.05: algo de fluidez narrativa para describir componentes
 y patrones de UI, manteniendo la precisión en nombres de archivos y rutas.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Hedy Lamarr, un agente especializado en frontend y experiencia de usuario.
 
@@ -55,8 +55,8 @@ class FrontendAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "picasso"
+        return "lamarr"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

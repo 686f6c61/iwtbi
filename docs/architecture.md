@@ -27,9 +27,9 @@ This document explains how IWTBI is put together and how a repository moves thro
 ### External dependencies
 
 - GitHub for repository clone and metadata
-- Supabase for saved analyses and email subscriptions
+- Internal PostgreSQL for saved analyses, pending email notifications, and future-update preferences
 - Resend for optional email delivery
-- One LLM provider: z.ai or Ollama Cloud
+- One LLM provider: NaN, z.ai or Ollama Cloud
 
 ## Request lifecycle
 
@@ -40,7 +40,7 @@ sequenceDiagram
     participant B as Backend
     participant G as GitHub
     participant L as LLM Provider
-    participant S as Supabase
+    participant P as Postgres
     participant R as Resend
 
     U->>F: Paste GitHub repo URL
@@ -50,11 +50,11 @@ sequenceDiagram
     F->>B: GET /api/ticket
     B-->>F: X-Ticket token
     F->>B: POST /api/analyze
-    B->>S: Check cache
+    B->>P: Check cache
     B->>G: Clone repo
     B->>L: Run 7 agents in parallel
     B->>L: Synthesize final document
-    B->>S: Upsert analysis
+    B->>P: Upsert analysis
     B-->>F: SSE progress + final document
     B->>R: Optional email notification
 ```
@@ -67,24 +67,28 @@ The backend performs the analysis in these phases:
 2. Preflight the repo size and useful context
 3. Clone the repository
 4. Build a deterministic file tree and prioritized context bundle
-5. Run 7 specialized agents in parallel
-6. Synthesize a final document
-7. Save the result to Supabase
+5. Run 7 specialized agents in batches of at most 3
+6. Ask Margaret Hamilton to integrate and validate the build plan
+7. Save the result to PostgreSQL
 8. Fan out email notifications if needed
 
 ## Agent layout
 
-The current pipeline uses these analysis agents:
+The current pipeline uses these named analysis agents:
 
-- stack
-- architecture
-- database
-- api
-- frontend
-- logic
-- devops
+- Grace Hopper (`hopper`): stack and build
+- Alan Kay (`kay`): architecture and module map
+- Barbara Liskov (`liskov`): database and persistence
+- Roy Fielding (`fielding`): APIs and contracts
+- Hedy Lamarr (`lamarr`): frontend and UX
+- Donald Knuth (`knuth`): business logic and algorithms
+- Lynn Conway (`conway`): DevOps and deployment
+- Margaret Hamilton (`hamilton`): integration and validation
 
-Their outputs are merged by a final synthesizer. If normal synthesis fails, the backend tries a rescue synthesis, then a deterministic fallback document so the run can still close cleanly.
+The seven specialist outputs are preserved verbatim. Margaret Hamilton makes
+one independent call after the `3 + 3 + 1` specialist batches to add the
+cross-cutting reconstruction plan; if it fails, the backend assembles the same
+specialist sections with a deterministic plan.
 
 ## File prioritization
 
@@ -106,7 +110,7 @@ Priority is biased toward:
 
 ## Persistence model
 
-Supabase stores two main datasets:
+Internal PostgreSQL stores the product's durable datasets:
 
 ### `analyses`
 
@@ -122,6 +126,17 @@ Supabase stores two main datasets:
 - email subscriptions for in-flight jobs
 - one row per requested notification
 - `sent_at` timestamp once delivered
+
+### `repo_subscriptions`
+
+- future-update subscriptions per repository and email
+- last notified git SHA
+- active/unsubscribed state
+
+### `email_preferences`
+
+- global future-update preference per email
+- global unsubscribe state
 
 ## Failure model
 

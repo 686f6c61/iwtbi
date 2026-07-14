@@ -1,7 +1,7 @@
 """Tests para el lector de archivos del repositorio."""
 
 from pathlib import Path
-import pytest
+
 from app.services.file_reader import FileReader, EXCLUDED_DIRS
 
 
@@ -55,6 +55,36 @@ def test_binary_files_excluded(tmp_path):
     reader = FileReader()
     ctx = reader.read(tmp_path)
     assert "image.png" not in ctx.files
+
+
+def test_estimate_counts_all_detected_text_files_beyond_measurement_cap(tmp_path):
+    """El preflight debe contar todos los textos aunque solo mida una muestra segura."""
+    for index in range(5):
+        (tmp_path / f"module_{index}.py").write_text(f"print({index})")
+
+    reader = FileReader(max_files=2, max_context_chars=10_000)
+    estimate = reader.estimate(tmp_path)
+
+    assert estimate.candidate_files == 5
+    assert estimate.measured_candidate_files == 2
+    assert estimate.measurement_limited is True
+
+
+def test_reader_keeps_high_priority_files_when_candidate_cap_is_hit(tmp_path):
+    """Si el repo se llena de ruido primero, deben sobrevivir README y configs clave."""
+    noisy = tmp_path / "aaa"
+    noisy.mkdir()
+    for index in range(5):
+        (noisy / f"zz_test_{index}.py").write_text("assert True\n")
+
+    (tmp_path / "README.md").write_text("# Proyecto\n")
+    (tmp_path / "package.json").write_text('{"name":"demo"}\n')
+
+    reader = FileReader(max_files=2, max_context_chars=10_000)
+    ctx = reader.read(tmp_path)
+
+    assert "README.md" in ctx.files
+    assert "package.json" in ctx.files
 
 
 def test_excluded_dirs_constant():

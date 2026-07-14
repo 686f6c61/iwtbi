@@ -34,11 +34,14 @@ class RepoPreflightResult:
     mode: PreflightMode
     reason: PreflightReason
     candidate_files: int
+    measured_candidate_files: int | None
     selected_files: int
     total_candidate_chars: int
     selected_chars: int
     oversized_files: int
     budget_truncated_files: int
+    measurement_limited: bool
+    repo_size_kb: int | None = None
 
 
 class RepoPreflightService:
@@ -46,10 +49,10 @@ class RepoPreflightService:
     Calcula si un repo entra en el modo normal, optimizado o demasiado grande.
     """
 
-    _TOO_LARGE_CONTEXT_MULTIPLIER = 24
-    _SPARSE_CONTEXT_FILE_FLOOR = 8
-    _SPARSE_HUGE_FILE_FLOOR = 12
-    _SPARSE_HUGE_CONTEXT_MULTIPLIER = 18
+    _SPARSE_CONTEXT_FILE_FLOOR = 4
+    _SPARSE_CONTEXT_MULTIPLIER = 8
+    _EXTREME_CONTEXT_FILE_FLOOR = 12
+    _EXTREME_CONTEXT_MULTIPLIER = 128
 
     def __init__(self) -> None:
         self._cloner = GitCloner()
@@ -73,22 +76,27 @@ class RepoPreflightService:
                 mode=mode,
                 reason=reason,
                 candidate_files=estimate.candidate_files,
+                measured_candidate_files=estimate.measured_candidate_files,
                 selected_files=estimate.selected_files,
                 total_candidate_chars=estimate.total_candidate_chars,
                 selected_chars=estimate.selected_chars,
                 oversized_files=estimate.oversized_files,
                 budget_truncated_files=estimate.budget_truncated_files,
+                measurement_limited=estimate.measurement_limited,
             )
-        except RepoSizeLimitExceeded:
+        except RepoSizeLimitExceeded as exc:
             return RepoPreflightResult(
                 mode="too_large",
                 reason="repo_size_limit",
                 candidate_files=0,
+                measured_candidate_files=0,
                 selected_files=0,
                 total_candidate_chars=0,
                 selected_chars=0,
                 oversized_files=0,
                 budget_truncated_files=0,
+                measurement_limited=False,
+                repo_size_kb=exc.size_kb,
             )
         finally:
             self._cloner.cleanup(job_id)
@@ -108,15 +116,22 @@ class RepoPreflightService:
         if estimate.total_candidate_chars <= settings.max_context_chars:
             return "normal", "fits_context"
 
+        # Si el presupuesto solo consigue cubrir muy pocos archivos clave,
+        # el análisis tenderá a ser demasiado frágil para una sola pasada.
         if (
             estimate.selected_files < self._SPARSE_CONTEXT_FILE_FLOOR
-            or estimate.total_candidate_chars
-            > settings.max_context_chars * self._TOO_LARGE_CONTEXT_MULTIPLIER
-            or (
-                estimate.selected_files < self._SPARSE_HUGE_FILE_FLOOR
-                and estimate.total_candidate_chars
-                > settings.max_context_chars * self._SPARSE_HUGE_CONTEXT_MULTIPLIER
-            )
+            and estimate.total_candidate_chars
+            > settings.max_context_chars * self._SPARSE_CONTEXT_MULTIPLIER
+        ):
+            return "too_large", "context_budget_exceeded"
+
+        # Repositorios textualmente enormes pero todavía por debajo del límite
+        # bruto de MB pueden entrar aquí. Solo se bloquean cuando, además, la
+        # cobertura efectiva sigue siendo escasa.
+        if (
+            estimate.selected_files < self._EXTREME_CONTEXT_FILE_FLOOR
+            and estimate.total_candidate_chars
+            > settings.max_context_chars * self._EXTREME_CONTEXT_MULTIPLIER
         ):
             return "too_large", "context_budget_exceeded"
 

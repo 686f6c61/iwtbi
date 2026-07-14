@@ -30,7 +30,7 @@ def test_preflight_marks_medium_over_budget_context_as_optimized():
             candidate_files=80,
             selected_files=24,
             total_candidate_chars=150_000,
-            selected_chars=80_000,
+            selected_chars=120_000,
             oversized_files=1,
             budget_truncated_files=1,
         )
@@ -40,15 +40,15 @@ def test_preflight_marks_medium_over_budget_context_as_optimized():
     assert reason == "prioritized_context"
 
 
-def test_preflight_marks_repo_over_750_candidate_files_as_too_large():
+def test_preflight_marks_repo_over_2500_candidate_files_as_too_large():
     service = RepoPreflightService()
 
     mode, reason = service._decide_mode(
         ContextEstimate(
-            candidate_files=751,
+            candidate_files=2501,
             selected_files=32,
             total_candidate_chars=640_000,
-            selected_chars=80_000,
+            selected_chars=120_000,
             oversized_files=0,
             budget_truncated_files=1,
         )
@@ -66,7 +66,7 @@ def test_preflight_marks_sparse_context_as_too_large():
             candidate_files=201,
             selected_files=3,
             total_candidate_chars=1_541_815,
-            selected_chars=80_000,
+            selected_chars=120_000,
             oversized_files=0,
             budget_truncated_files=1,
         )
@@ -84,7 +84,7 @@ def test_preflight_marks_huge_but_still_coverable_context_as_optimized():
             candidate_files=87,
             selected_files=26,
             total_candidate_chars=1_245_372,
-            selected_chars=80_000,
+            selected_chars=120_000,
             oversized_files=2,
             budget_truncated_files=1,
         )
@@ -102,11 +102,65 @@ def test_preflight_marks_sparse_huge_context_as_too_large():
             candidate_files=499,
             selected_files=11,
             total_candidate_chars=2_195_694,
-            selected_chars=80_000,
+            selected_chars=120_000,
             oversized_files=0,
             budget_truncated_files=1,
         )
     )
 
-    assert mode == "too_large"
-    assert reason == "context_budget_exceeded"
+    assert mode == "optimized"
+    assert reason == "prioritized_context"
+
+
+def test_preflight_allows_large_but_coverable_repo_as_optimized():
+    service = RepoPreflightService()
+
+    mode, reason = service._decide_mode(
+        ContextEstimate(
+            candidate_files=256,
+            selected_files=13,
+            total_candidate_chars=2_766_021,
+            selected_chars=120_000,
+            oversized_files=0,
+            budget_truncated_files=1,
+        )
+    )
+
+    assert mode == "optimized"
+    assert reason == "prioritized_context"
+
+
+def test_preflight_allows_real_world_large_repo_when_key_coverage_is_reasonable():
+    service = RepoPreflightService()
+
+    mode, reason = service._decide_mode(
+        ContextEstimate(
+            candidate_files=958,
+            selected_files=18,
+            total_candidate_chars=7_106_301,
+            selected_chars=120_000,
+            oversized_files=0,
+            budget_truncated_files=1,
+        )
+    )
+
+    assert mode == "optimized"
+    assert reason == "prioritized_context"
+
+
+def test_preflight_allows_fastapi_like_repo_as_optimized():
+    service = RepoPreflightService()
+
+    mode, reason = service._decide_mode(
+        ContextEstimate(
+            candidate_files=2000,
+            selected_files=7,
+            total_candidate_chars=9_472_514,
+            selected_chars=120_000,
+            oversized_files=1,
+            budget_truncated_files=1,
+        )
+    )
+
+    assert mode == "optimized"
+    assert reason == "prioritized_context"

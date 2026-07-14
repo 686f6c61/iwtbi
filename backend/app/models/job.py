@@ -42,6 +42,10 @@ class Job(BaseModel):
 
     job_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     repo_url: str
+    provider_override: Optional[str] = None
+    model_override: Optional[str] = None
+    disable_fallback: bool = False
+    profile_label: Optional[str] = None
     status: JobStatus = JobStatus.PENDING
     document: Optional[str] = None
     error: Optional[str] = None

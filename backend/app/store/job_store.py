@@ -37,8 +37,17 @@ class JobStore:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._tickets: dict[str, _TicketRecord] = {}
+        self.backend_kind = "memory"
 
-    def create(self, repo_url: str) -> Job:
+    def create(
+        self,
+        repo_url: str,
+        *,
+        provider_override: str | None = None,
+        model_override: str | None = None,
+        disable_fallback: bool = False,
+        profile_label: str | None = None,
+    ) -> Job:
         """
         Crea un nuevo job y lo registra en el store.
 
@@ -48,7 +57,13 @@ class JobStore:
         Returns:
             El job creado con su cola SSE inicializada.
         """
-        job = Job(repo_url=repo_url)
+        job = Job(
+            repo_url=repo_url,
+            provider_override=provider_override,
+            model_override=model_override,
+            disable_fallback=disable_fallback,
+            profile_label=profile_label,
+        )
         job.new_queue()
         self._jobs[job.job_id] = job
         return job
@@ -88,6 +103,10 @@ class JobStore:
         if job := self._jobs.get(job_id):
             job.orchestrator_task = task
 
+    def enqueue(self, job_id: str) -> None:
+        """Compatibilidad con stores externos: en memoria no hay cola separada."""
+        return None
+
     def remove(self, job_id: str) -> None:
         """
         Elimina un job del store para liberar memoria.
@@ -99,6 +118,46 @@ class JobStore:
             job_id: Identificador del job a eliminar.
         """
         self._jobs.pop(job_id, None)
+
+    def request_cancel(self, job_id: str) -> None:
+        """
+        Solicita la cancelación del job.
+
+        En el store en memoria podemos cancelar directamente la tarea asyncio.
+        """
+        if job := self._jobs.get(job_id):
+            if job.orchestrator_task:
+                job.orchestrator_task.cancel()
+
+    def is_cancel_requested(self, job_id: str) -> bool:
+        """En memoria la cancelación se ejecuta directamente, no se marca."""
+        return False
+
+    async def emit_event(self, job_id: str, event_type: str, data: dict) -> None:
+        """Encola un evento SSE para el consumidor conectado al job."""
+        if job := self._jobs.get(job_id):
+            if job.queue:
+                await job.queue.put({"type": event_type, "data": data})
+
+    async def read_next_event(self, job_id: str, timeout: float) -> dict | None:
+        """
+        Lee el siguiente evento SSE del job o None si vence el timeout.
+        """
+        job = self._jobs.get(job_id)
+        if not job or job.queue is None:
+            return None
+        try:
+            return await asyncio.wait_for(job.queue.get(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
+
+    def drain_events(self, job_id: str) -> None:
+        """Vacía la cola SSE del job si existe."""
+        job = self._jobs.get(job_id)
+        if not job or job.queue is None:
+            return
+        while not job.queue.empty():
+            job.queue.get_nowait()
 
     def issue_ticket(self, *, client_ip: str, user_agent: str) -> str:
         """

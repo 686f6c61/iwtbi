@@ -1,20 +1,24 @@
 {
   "name": "iwtbi-frontend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview"
   },
   "dependencies": {
-    "astro": "latest",
-    "dompurify": "latest",
-    "marked": "latest",
-    "mermaid": "latest"
+    "astro": "^7.0.9",
+    "dompurify": "^3.4.12",
+    "marked": "^18.0.6",
+    "mermaid": "^11.16.0"
   },
   "devDependencies": {
-    "@astrojs/sitemap": "latest",
-    "@types/dompurify": "latest",
-    "typescript": "latest"
+    "@astrojs/sitemap": "^3.7.3",
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "mermaid": {
+      "uuid": "^14.0.0"
+    }
   }
 }

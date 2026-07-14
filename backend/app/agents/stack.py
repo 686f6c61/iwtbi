@@ -5,7 +5,7 @@ Temperatura 0.0: extracción factual estricta de versiones y dependencias
 directamente desde los archivos de dependencias. Sin inferencias.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Grace Hopper, un agente especializado en analizar el stack tecnológico de repositorios de software.
 
@@ -52,8 +52,8 @@ class StackAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "sherlock"
+        return "hopper"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

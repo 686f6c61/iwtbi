@@ -9,7 +9,7 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  site: 'https://app.example.com',
+  site: process.env.PUBLIC_APP_URL || 'http://localhost:3410',
   output: 'static',
   integrations: [
     sitemap(),

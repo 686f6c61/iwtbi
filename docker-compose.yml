@@ -1,19 +1,92 @@
 # docker-compose.yml
-# Orquesta frontend Astro (nginx) y backend FastAPI.
+# Orquesta el stack self-host completo.
 # Puertos 3410/8410 para evitar conflictos con otros proyectos Docker activos.
 services:
-  frontend:
-    build: ./frontend
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-iwtbi}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
-      - "${IWTBI_FRONTEND_PORT:-3410}:8080"
+      - "127.0.0.1:${IWTBI_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./backend/postgres/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?set POSTGRES_USER in .env} -d ${POSTGRES_DB:-iwtbi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        PUBLIC_BACKEND_URL: ${PUBLIC_BACKEND_URL:-http://localhost:8410}
+        PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3410}
+        PUBLIC_AUTHOR_URL: ${PUBLIC_AUTHOR_URL:-}
+        PUBLIC_AUTHOR_LABEL: ${PUBLIC_AUTHOR_LABEL:-}
+        PUBLIC_SOURCE_URL: ${PUBLIC_SOURCE_URL:-}
+        PUBLIC_SOCIAL_HANDLE: ${PUBLIC_SOCIAL_HANDLE:-}
+        PUBLIC_LINKEDIN_URL: ${PUBLIC_LINKEDIN_URL:-}
+        PUBLIC_EXTENSION_DOWNLOADS_ENABLED: ${PUBLIC_EXTENSION_DOWNLOADS_ENABLED:-false}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${IWTBI_FRONTEND_PORT:-3410}:8080"
     depends_on:
       - backend
 
   backend:
     build: ./backend
+    restart: unless-stopped
     ports:
-      - "${IWTBI_BACKEND_PORT:-8410}:8000"
+      - "127.0.0.1:${IWTBI_BACKEND_PORT:-8410}:8000"
     env_file:
       - .env
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-iwtbi}
+      JOB_STORE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - /tmp/iwtbi:/tmp/iwtbi
+
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-iwtbi}
+      JOB_STORE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /tmp/iwtbi:/tmp/iwtbi
+
+volumes:
+  postgres_data:

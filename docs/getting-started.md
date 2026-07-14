@@ -6,10 +6,7 @@ This guide covers the fastest way to run IWTBI locally.
 
 - Docker and Docker Compose
 - Git
-- A Supabase project
-- Credentials for one supported LLM provider:
-  - z.ai
-  - Ollama Cloud
+- Credentials for an OpenAI-compatible API or one built-in provider profile
 
 Optional:
 
@@ -17,17 +14,18 @@ Optional:
 
 ## Option 1: Run the full stack with Docker Compose
 
-1. Copy the root environment file:
+1. Generate the root environment file and local secrets:
 
    ```bash
-   cp .env.example .env
+   ./scripts/init-self-host.sh
    ```
 
 2. Fill in the required values:
    - `PROVIDER`
    - provider credentials
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_KEY`
+   - `OPENAI_COMPATIBLE_API_KEY`
+   - `OPENAI_COMPATIBLE_BASE_URL`
+   - `OPENAI_COMPATIBLE_MODEL`
 
 3. Start the application:
 
@@ -63,26 +61,39 @@ npm run dev -- --host 0.0.0.0 --port 4321
 
 With the default examples, the frontend expects the API at `http://localhost:8410` when built statically and can point to `http://localhost:8000` if you choose to adjust `frontend/.env` for direct backend development.
 
-## Required external services
+## Required services
 
-### Supabase
+### PostgreSQL
 
-Supabase is required for:
+The default Docker Compose stack starts internal PostgreSQL and applies
+`backend/postgres/schema.sql` automatically on first boot. It stores:
 
 - cached analyses
 - the public library
 - queued email notifications
+- future-update subscriptions and email preferences
 
-For a fresh setup, run `backend/supabase/schema.sql` against your Supabase project, either through the Supabase SQL editor or with your preferred PostgreSQL client.
+For backend-only development, start your own PostgreSQL and apply:
+
+```bash
+psql "$DATABASE_URL" -f backend/postgres/schema.sql
+```
+
+The backend also applies the same schema idempotently on startup when
+`DATABASE_URL` is configured.
 
 ### LLM provider
 
 Choose one provider through `PROVIDER`:
 
+- `openai_compatible`
+- `nan`
 - `zai`
 - `ollama_cloud`
 
-Only one needs to be configured for the app to run.
+Only one needs to be configured for the app to run. The generic profile works
+with any service that implements the OpenAI chat API; set the base URL, model
+identifier and key supplied by that service.
 
 ### Resend
 
@@ -92,11 +103,11 @@ Email notifications are optional. If `RESEND_API_KEY` is empty, analysis still w
 
 After the app starts, verify:
 
-1. `GET /health` returns `status: ok`
+1. `GET /health` returns `status: ok` after your provider is configured
 2. the homepage loads
 3. `POST /api/preflight` accepts a public GitHub repo URL
 4. `GET /api/ticket` returns a ticket when called from the allowed frontend origin
-5. a new analysis appears in Supabase and then in `/biblioteca`
+5. a new analysis appears in Postgres and then in `/biblioteca`
 
 ## Troubleshooting
 
@@ -104,9 +115,8 @@ After the app starts, verify:
 
 Check:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_KEY`
-- provider credentials
+- `DATABASE_URL`
+- provider credentials and model name
 
 The backend validates settings on startup and fails fast when required values are missing.
 

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IWTBI for GitHub</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <div class="popup-meta" id="popup-meta">repo detectado</div>
+
+      <section class="popup-card">
+        <header class="popup-top">
+          <div class="popup-brand">
+            <div class="popup-icon">
+              <img class="popup-icon-img" src="./assets/brand/icon-64.png" alt="IWTBI" />
+            </div>
+            <div class="popup-brand-copy">
+              <div class="popup-wordmark">
+                <span class="popup-wordmark-main">IWTBI</span>
+                <span class="popup-wordmark-sub">for GitHub</span>
+              </div>
+              <span class="popup-chip" id="popup-chip">repo detectado</span>
+            </div>
+          </div>
+          <button class="popup-close" id="popup-close" type="button" aria-label="Cerrar">
+            ✕
+          </button>
+        </header>
+
+        <div class="popup-body">
+          <h1 class="popup-title" id="popup-title">Analizar este repo</h1>
+          <p class="popup-desc" id="popup-desc">
+            La extensión detecta la URL actual de GitHub y te lleva al análisis en IWTBI con un solo clic.
+          </p>
+
+          <section class="repo-box" id="repo-box" aria-live="polite">
+            <p class="repo-label">REPO ACTUAL</p>
+            <p class="repo-slug" id="repo-slug">owner/repo</p>
+            <p class="repo-url" id="repo-url">https://github.com/owner/repo</p>
+          </section>
+
+          <section class="settings-box" aria-label="Configuración del banner">
+            <div class="settings-head">
+              <div>
+                <p class="settings-label">INYECCIÓN DEL BANNER</p>
+                <p class="settings-desc">Controla cómo aparece IWTBI dentro de GitHub.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="banner-enabled" checked />
+                <span class="switch-ui" aria-hidden="true"></span>
+                <span class="switch-text" id="switch-text">Activa</span>
+              </label>
+            </div>
+
+            <div class="mode-group" role="radiogroup" aria-label="Modo del banner">
+              <button class="mode-pill is-active" id="mode-showcase" type="button" data-mode="showcase" aria-pressed="true">
+                Destacado
+              </button>
+              <button class="mode-pill" id="mode-compact" type="button" data-mode="compact" aria-pressed="false">
+                Compacto
+              </button>
+            </div>
+          </section>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="analyze-btn" type="button">
+              Crear documento →
+            </button>
+            <button class="btn btn-secondary" id="open-app-btn" type="button">
+              Abrir biblioteca
+            </button>
+          </div>
+
+          <p class="popup-foot" id="popup-foot">
+            Abre una pestaña nueva con la URL ya preparada en tu instancia.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./repo.js"></script>
+    <script src="./popup.js"></script>
+  </body>
+</html>

@@ -23,6 +23,69 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.0.0",
+    date: "14 jul 2026",
+    sections: [
+      {
+        type: "added",
+        items: [
+          "Ocho agentes con identidad propia: Grace Hopper, Alan Kay, Barbara Liskov, Roy Fielding, Hedy Lamarr, Donald Knuth y Lynn Conway como especialistas, con Margaret Hamilton como integradora y validadora.",
+          "Documento de reconstrucción autocontenido: URL y commit de origen, árbol objetivo, orden de construcción, contratos, diagramas Mermaid, tablas, criterios de aceptación, evidencias e incógnitas.",
+          "Extensión 2.0 para Chrome y Firefox con permisos mínimos, iconos de estado reales, detección más estricta de repositorios, acceso a Biblioteca, controles accesibles y tolerancia a errores del navegador.",
+          "Distribución self-host autónoma con PostgreSQL y Redis vacíos, worker dedicado, proveedor OpenAI-compatible genérico, marca configurable y generación local de secretos.",
+        ],
+      },
+      {
+        type: "changed",
+        items: [
+          "Los siete especialistas conservan íntegros sus informes y Margaret Hamilton añade un plano transversal sin resumir ni borrar el detalle necesario para construir.",
+          "Ejecución limitada a tres llamadas de IA simultáneas en lotes 3 + 3 + 1, seguida de la integración; el proveedor principal y sus respaldos son configurables.",
+          "Migración de persistencia a PostgreSQL y límites públicos ajustados a 10 análisis por hora, 20 preflight y 60 tickets por minuto e IP.",
+          "Se retiró Google Analytics, incluido el consentimiento, el texto legal y sus permisos de red.",
+        ],
+      },
+      {
+        type: "fixed",
+        items: [
+          "Mermaid mantiene etiquetas legibles, contraste claro y desplazamiento horizontal en diagramas densos, tanto en análisis en vivo como en Biblioteca.",
+          "Seguridad reforzada con proxies confiables, token para análisis internos, bajas con caducidad, lectura de archivos acotada, sanitización Markdown, Redis para rate limits y dependencias actualizadas.",
+          "Suite y CI recuperadas con pruebas del backend, frontend y extensión, incluyendo el detector de URLs de GitHub.",
+          "Export público protegido contra bases locales, secretos, artefactos de producción, migraciones internas, paquetes precompilados y cachés de desarrollo.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.0.1",
+    date: "7 abr 2026",
+    sections: [
+      {
+        type: "added",
+        items: [
+          "Extensión oficial para Chrome y Firefox, con detección de repos GitHub, banner inyectado y descargas públicas desde la web.",
+          "Suscripción opcional a futuros análisis del mismo repo, con enlaces de baja por repo o global desde el correo.",
+          "Página de preferencias de avisos y carril interno para backfills administrativos sin depender del rate limit público.",
+        ],
+      },
+      {
+        type: "changed",
+        items: [
+          "Infra preparada para separar API y ejecución: Redis como cola de jobs, worker dedicado y ruta interna de administración.",
+          "Sección Cómo funciona ampliada con la experiencia real de la extensión y su configuración dentro de GitHub.",
+          "Changelog del footer sincronizado con el repositorio para reflejar esta nueva versión 1.0.1.",
+        ],
+      },
+      {
+        type: "fixed",
+        items: [
+          "Los correos pendientes ya siguen el repo correcto aunque el análisis cierre en un reintento distinto al job original.",
+          "La pantalla de análisis renderiza mejor el documento final en vivo, incluyendo Mermaid y cierre visual consistente con biblioteca.",
+          "Los errores parciales de agentes ya no aparecen incrustados como texto interno dentro del documento final.",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.0",
     date: "6 abr 2026",
     sections: [
@@ -62,7 +125,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         type: "added",
         items: [
           "Biblioteca pública de análisis con listado y vista individual.",
-          "Caché persistente en Supabase por repositorio y SHA.",
+          "Caché persistente por repositorio y SHA.",
           "Popup previo al análisis con email opcional y soporte de reanálisis.",
           "Notificaciones por email cuando el análisis termina.",
         ],

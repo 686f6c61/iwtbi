@@ -3,34 +3,200 @@
  * Footer global de IWTBI.
  *
  * Contiene el crédito del autor y los enlaces rápidos (Twitter, GitHub,
- * Changelog, Privacidad). El botón Changelog abre el modal global que
- * se inicializa en Layout.astro a través de window.__openChangelog.
+ * Changelog, Extensión y Privacidad). El botón Changelog abre el modal
+ * global que se inicializa en Layout.astro a través de window.__openChangelog.
  */
+const authorUrl = import.meta.env.PUBLIC_AUTHOR_URL ?? "";
+const authorLabel = import.meta.env.PUBLIC_AUTHOR_LABEL ?? "";
+const sourceUrl = import.meta.env.PUBLIC_SOURCE_URL ?? "";
+const extensionDownloadsEnabled =
+  (import.meta.env.PUBLIC_EXTENSION_DOWNLOADS_ENABLED ?? "false") === "true";
 ---
 
 <footer>
-  <a
-    href="https://x.com/hex686f6c61"
-    target="_blank"
-    rel="noopener"
-    class="footer-credit"
-  >Creado por 686f6c61</a>
+  {authorUrl && authorLabel ? (
+    <a href={authorUrl} target="_blank" rel="noopener" class="footer-credit">
+      Creado por {authorLabel}
+    </a>
+  ) : <span class="footer-credit">IWTBI</span>}
 
   <div class="footer-links">
-    <a href="https://x.com/hex686f6c61" target="_blank" rel="noopener" class="btn-footer">
-      Twitter
-    </a>
-    <a href="https://github.com/686f6c61/iwtbi" target="_blank" rel="noopener" class="btn-footer">
+    {sourceUrl && <a href={sourceUrl} target="_blank" rel="noopener" class="btn-footer">
       GitHub
-    </a>
+    </a>}
     <button class="btn-footer btn-footer-accent" data-action="open-changelog">
       Changelog
     </button>
+    {extensionDownloadsEnabled && <button class="btn-footer btn-footer-accent" data-action="open-extension-modal">
+      Extensión navegador
+    </button>}
     <a href="/legal" class="btn-footer btn-footer-accent">
       Privacidad
     </a>
   </div>
 </footer>
+
+{extensionDownloadsEnabled && <div
+  id="extm-overlay"
+  class="extm-overlay extm-hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="extm-title"
+>
+  <div class="extm-modal">
+    <div class="extm-header">
+      <div class="extm-header-copy">
+        <span class="extm-kicker">Extensión oficial</span>
+        <h2 id="extm-title" class="extm-title">IWTBI dentro de GitHub</h2>
+      </div>
+      <button id="extm-close" class="extm-close" aria-label="Cerrar">×</button>
+    </div>
+
+    <div class="extm-body">
+      <div class="extm-copy">
+        <p class="extm-desc">
+          La extensión detecta cuándo estás sobre un repositorio de GitHub,
+          activa el icono de IWTBI y prepara el documento con la URL correcta.
+        </p>
+
+        <div class="extm-points">
+          <div class="extm-point">
+            <span class="extm-point-badge">01</span>
+            <div>
+              <strong>Se activa solo en repos válidos</strong>
+              <span>Si no estás en un repo de GitHub, la extensión se queda dormida.</span>
+            </div>
+          </div>
+          <div class="extm-point">
+            <span class="extm-point-badge">02</span>
+            <div>
+              <strong>Inserta un banner dentro de GitHub</strong>
+              <span>Ves el CTA en contexto y lanzas el análisis sin salirte del repo.</span>
+            </div>
+          </div>
+          <div class="extm-point">
+            <span class="extm-point-badge">03</span>
+            <div>
+              <strong>Crea un documento reutilizable</strong>
+              <span>El popup prepara la URL para generar el Markdown que entregarás a tu IA.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="extm-downloads">
+          <a href="/downloads/iwtbi-extension-chrome.zip" class="extm-btn extm-btn-primary" download>
+            Descargar ZIP para Chrome
+          </a>
+          <a href="/downloads/iwtbi-extension-firefox.zip" class="extm-btn extm-btn-secondary" download>
+            Descargar ZIP para Firefox
+          </a>
+        </div>
+      </div>
+
+      <div class="extm-preview">
+        <div class="extm-browser">
+          <div class="extm-browser-top">
+            <div class="extm-tab">github.com/owner/repo</div>
+            <div class="extm-toolbar">
+              <span class="extm-tool-dot"></span>
+              <span class="extm-tool-dot extm-tool-dot-coral"></span>
+              <span class="extm-tool-dot"></span>
+            </div>
+          </div>
+          <div class="extm-banner">
+            <div class="extm-banner-main">
+              <div class="extm-brand-icon">
+                <img src="/favicon.png" alt="IWTBI" />
+              </div>
+              <div class="extm-banner-copy">
+                <div class="extm-brandline">
+                  <span class="extm-brandword">IWTBI</span>
+                  <span class="extm-brandsub">for GitHub</span>
+                </div>
+                <span class="extm-chip">repo detectado</span>
+                <strong class="extm-banner-title">Analiza owner/repo con IWTBI</strong>
+                <span class="extm-banner-text">
+                  Convierte este repo en un documento Markdown autocontenido para reconstruirlo con una IA.
+                </span>
+              </div>
+            </div>
+            <span class="extm-banner-btn">Analizar en IWTBI →</span>
+          </div>
+        </div>
+
+        <div class="extm-popup-demo">
+          <span class="extm-popup-meta">repo detectado</span>
+          <div class="extm-popup-card">
+            <div class="extm-popup-head">
+              <div class="extm-popup-brand">
+                <div class="extm-popup-icon">
+                  <img src="/favicon.png" alt="IWTBI" />
+                </div>
+                <div class="extm-popup-brandcopy">
+                  <div class="extm-brandline">
+                    <span class="extm-brandword">IWTBI</span>
+                    <span class="extm-brandsub">for GitHub</span>
+                  </div>
+                  <span class="extm-popup-chip">repo detectado</span>
+                </div>
+              </div>
+              <span class="extm-popup-close">✕</span>
+            </div>
+            <div class="extm-popup-title">Analizar este repo</div>
+            <p class="extm-popup-text">
+              La extensión detecta la URL actual de GitHub y abre IWTBI con el análisis listo para empezar.
+            </p>
+            <div class="extm-repo-box">
+              <span class="extm-repo-label">REPO ACTUAL</span>
+              <strong class="extm-repo-name">owner/repo</strong>
+              <span class="extm-repo-url">https://github.com/owner/repo</span>
+            </div>
+            <div class="extm-popup-actions">
+              <span class="extm-btn extm-btn-primary">Crear documento →</span>
+              <span class="extm-btn extm-btn-secondary">Abrir biblioteca</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>}
+
+<script>
+  function openExtensionModal() {
+    document.getElementById("extm-overlay")?.classList.remove("extm-hidden");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeExtensionModal() {
+    document.getElementById("extm-overlay")?.classList.add("extm-hidden");
+    document.body.style.overflow = "";
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector("[data-action='open-extension-modal']")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        openExtensionModal();
+      });
+
+    document.getElementById("extm-close")?.addEventListener("click", () => {
+      closeExtensionModal();
+    });
+
+    document.getElementById("extm-overlay")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) {
+        closeExtensionModal();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeExtensionModal();
+      }
+    });
+  });
+</script>
 
 <style>
   footer {
@@ -87,7 +253,471 @@
     color: var(--white);
   }
 
-  @media (max-width: 640px) {
+  .extm-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.66);
+    z-index: 120;
+  }
+
+  .extm-hidden {
+    display: none !important;
+  }
+
+  .extm-modal {
+    width: min(1080px, calc(100vw - 32px));
+    max-height: min(92svh, 860px);
+    display: flex;
+    flex-direction: column;
+    border: 2px solid var(--black);
+    background: var(--white);
+    box-shadow: 10px 10px 0 var(--coral);
+    overflow: hidden;
+  }
+
+  .extm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 24px;
+    border-bottom: 2px solid var(--black);
+    background:
+      linear-gradient(180deg, rgba(255, 181, 167, 0.22) 0%, rgba(255, 181, 167, 0) 100%),
+      #fff9f5;
+  }
+
+  .extm-header-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .extm-kicker {
+    width: fit-content;
+    padding: 6px 12px;
+    border: 2px solid var(--black);
+    border-radius: 999px;
+    background: var(--coral);
+    box-shadow: 3px 3px 0 var(--black);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .extm-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 2vw, 2.2rem);
+    line-height: 0.95;
+    color: var(--black);
+  }
+
+  .extm-close {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--black);
+    background: var(--white);
+    font-size: 1.35rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 3px 3px 0 var(--coral);
+  }
+
+  .extm-close:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  .extm-body {
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1.02fr 0.98fr;
+    gap: 24px;
+    padding: 24px;
+  }
+
+  .extm-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .extm-desc {
+    max-width: 56ch;
+    font-size: 0.96rem;
+    line-height: 1.68;
+    color: var(--mid);
+  }
+
+  .extm-points {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .extm-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 2px solid var(--black);
+    background: var(--white);
+    box-shadow: 4px 4px 0 var(--coral);
+  }
+
+  .extm-point-badge {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .extm-point div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .extm-point strong {
+    font-size: 0.86rem;
+    color: var(--black);
+  }
+
+  .extm-point span:last-child {
+    font-size: 0.82rem;
+    line-height: 1.52;
+    color: var(--mid);
+  }
+
+  .extm-downloads {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 2px;
+  }
+
+  .extm-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .extm-browser {
+    border: 2px solid var(--black);
+    background: #eef5ff;
+    box-shadow: 4px 4px 0 var(--coral);
+    overflow: hidden;
+  }
+
+  .extm-browser-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--black);
+    background: #f5f7fb;
+  }
+
+  .extm-tab {
+    padding: 8px 14px;
+    border: 2px solid var(--black);
+    background: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .extm-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .extm-tool-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--black);
+  }
+
+  .extm-tool-dot-coral {
+    background: var(--coral);
+  }
+
+  .extm-banner {
+    margin: 18px;
+    padding: 18px 20px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    position: relative;
+    border: 2px solid var(--black);
+    background:
+      linear-gradient(180deg, rgba(255, 181, 167, 0.26) 0%, rgba(255, 181, 167, 0) 42%),
+      var(--white);
+    box-shadow: 6px 6px 0 var(--coral);
+  }
+
+  .extm-banner::before,
+  .extm-popup-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 8px;
+    background: linear-gradient(90deg, #f28f7d, var(--coral));
+  }
+
+  .extm-banner-main {
+    display: flex;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .extm-brand-icon,
+  .extm-popup-icon {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--black);
+    background: var(--coral);
+    box-shadow: 3px 3px 0 var(--black);
+    border-radius: 10px;
+  }
+
+  .extm-brand-icon img,
+  .extm-popup-icon img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+
+  .extm-banner-copy,
+  .extm-popup-brandcopy {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .extm-brandline {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 1;
+  }
+
+  .extm-brandword {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    color: var(--black);
+  }
+
+  .extm-brandsub {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f28f7d;
+  }
+
+  .extm-chip,
+  .extm-popup-chip,
+  .extm-popup-meta {
+    width: fit-content;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 2px solid var(--black);
+    background: var(--coral);
+    font-size: 0.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .extm-banner-title {
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    line-height: 1.1;
+    color: var(--black);
+  }
+
+  .extm-banner-text {
+    font-size: 0.79rem;
+    line-height: 1.45;
+    color: var(--mid);
+  }
+
+  .extm-banner-btn,
+  .extm-btn {
+    min-height: 46px;
+    padding: 0 18px;
+    border: 2px solid var(--black);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-align: center;
+    transition: transform 0.1s, box-shadow 0.1s, opacity 0.1s;
+  }
+
+  .extm-banner-btn {
+    align-self: center;
+    flex-shrink: 0;
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+    white-space: nowrap;
+  }
+
+  .extm-banner-btn:hover,
+  .extm-btn:hover {
+    transform: translate(-2px, -2px);
+  }
+
+  .extm-banner-btn:hover,
+  .extm-btn-primary:hover {
+    box-shadow: 5px 5px 0 var(--coral);
+  }
+
+  .extm-popup-demo {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    border: 2px solid var(--black);
+    background: #1a1a1a;
+    box-shadow: 4px 4px 0 var(--coral);
+  }
+
+  .extm-popup-meta {
+    box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.65);
+  }
+
+  .extm-popup-card {
+    width: 100%;
+    padding: 18px;
+    position: relative;
+    border: 2px solid var(--black);
+    background:
+      linear-gradient(180deg, #fff8f4 0%, var(--white) 18%, var(--white) 100%);
+    box-shadow: 6px 6px 0 var(--coral);
+  }
+
+  .extm-popup-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .extm-popup-brand {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .extm-popup-close {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid #b7b7b7;
+    border-radius: 7px;
+    color: #888;
+    background: var(--white);
+    flex-shrink: 0;
+  }
+
+  .extm-popup-title {
+    margin-top: 14px;
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--black);
+  }
+
+  .extm-popup-text {
+    margin-top: 10px;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--mid);
+  }
+
+  .extm-repo-box {
+    margin-top: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 2px solid var(--black);
+    background:
+      linear-gradient(180deg, rgba(255, 181, 167, 0.28) 0%, rgba(255, 181, 167, 0) 42%),
+      #f5f8fc;
+  }
+
+  .extm-repo-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: #777;
+  }
+
+  .extm-repo-name {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    line-height: 1.05;
+    color: var(--black);
+  }
+
+  .extm-repo-url {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--mid);
+  }
+
+  .extm-popup-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .extm-btn-primary {
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+  }
+
+  .extm-btn-secondary {
+    background: var(--coral);
+    color: var(--black);
+    box-shadow: 2px 2px 0 var(--black);
+  }
+
+  @media (max-width: 760px) {
     footer {
       height: auto;
       padding: 16px 20px;
@@ -99,6 +729,49 @@
     .footer-links {
       width: 100%;
       flex-wrap: wrap;
+    }
+
+    .extm-overlay {
+      padding: 12px;
+    }
+
+    .extm-modal {
+      width: calc(100vw - 24px);
+      max-height: min(94svh, 920px);
+    }
+
+    .extm-header {
+      padding: 16px;
+      align-items: flex-start;
+    }
+
+    .extm-body {
+      padding: 16px;
+    }
+  }
+
+  @media (max-width: 960px) {
+    .extm-body {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .extm-banner {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .extm-banner-btn {
+      width: 100%;
+    }
+
+    .extm-downloads {
+      flex-direction: column;
+    }
+
+    .extm-downloads .extm-btn {
+      width: 100%;
     }
   }
 </style>

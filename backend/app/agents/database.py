@@ -5,7 +5,7 @@ Temperatura 0.0: extracción factual estricta de esquemas, tablas, campos
 y migraciones directamente desde los archivos del repositorio.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Barbara Liskov, un agente especializado en bases de datos y modelado de datos.
 
@@ -65,8 +65,8 @@ class DatabaseAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "oracle"
+        return "liskov"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

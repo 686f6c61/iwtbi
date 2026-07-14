@@ -1,11 +1,48 @@
 ---
 import Layout from "../layouts/Layout.astro";
+
+const APP_URL = (import.meta.env.PUBLIC_APP_URL ?? "http://localhost:3410").replace(/\/+$/, "");
+const APP_HOST = new URL(APP_URL).host;
+const extensionDownloadsEnabled =
+  (import.meta.env.PUBLIC_EXTENSION_DOWNLOADS_ENABLED ?? "false") === "true";
+
+const HOW_IT_WORKS_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "Cómo convertir un repositorio en documentación con IWTBI",
+  description:
+    "Proceso para transformar cualquier repositorio público de GitHub en un documento técnico listo para reconstrucción asistida por IA.",
+  totalTime: "PT10M",
+  step: [
+    {
+      "@type": "HowToStep",
+      name: "Abre el repo o usa la extensión",
+      text: `Cambia github.com por ${APP_HOST} o activa la extensión de IWTBI directamente sobre el repositorio.`,
+    },
+    {
+      "@type": "HowToStep",
+      name: "Confirma el repositorio",
+      text: "IWTBI mide el repo, valida el tamaño útil y te pide confirmación antes de analizar.",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Espera el análisis",
+      text: "Los agentes especializados trabajan en paralelo y muestran su progreso en tiempo real.",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Usa el documento",
+      text: "Descarga o copia la documentación final y úsala como contexto para reconstruir el proyecto.",
+    },
+  ],
+};
 ---
 
 <Layout
   title="Cómo funciona"
   description="Cuatro pasos para convertir cualquier repositorio público de GitHub en documentación estructurada lista para que Claude Code, Gemini CLI o Codex CLI lo reconstruyan."
-  keywords="cómo funciona IWTBI, análisis repositorio IA, pipeline Ollama, agentes open source, documentación para Claude, reconstruir proyecto con IA, ingeniería inversa repositorio"
+  keywords="cómo funciona IWTBI, análisis repositorio IA, agentes especializados, documentación para Claude, reconstruir proyecto con IA, ingeniería inversa repositorio"
+  structuredData={HOW_IT_WORKS_SCHEMA}
   activeLink="como-funciona"
   navCtaText="Probar ahora"
   navCtaHref="/analyze"
@@ -18,7 +55,8 @@ import Layout from "../layouts/Layout.astro";
       <p class="subtitle">
         Pegas una URL de GitHub y obtienes un documento exhaustivo —arquitectura,
         stack, APIs, lógica de negocio— listo para que un agente de IA
-        reconstruya el proyecto desde cero.
+        reconstruya el proyecto desde cero. Puedes hacerlo con la Magic URL o
+        con la extensión oficial para GitHub.
       </p>
     </section>
 
@@ -26,11 +64,11 @@ import Layout from "../layouts/Layout.astro";
     <section class="steps-grid">
       <div class="step-card">
         <span class="step-num">01</span>
-        <h2>Sustituye la URL</h2>
+        <h2>Magic URL o extensión</h2>
         <p>
           En la barra del navegador, cambia <code>github.com</code> por
-          <code>app.example.com</code>. Sin extensiones, sin herramientas extra. Solo
-          editar dos palabras.
+          <code>{APP_HOST}</code>. Si prefieres no tocar la URL, instala la
+          extensión y lánzalo desde el propio repositorio.
         </p>
       </div>
       <div class="step-card">
@@ -45,10 +83,10 @@ import Layout from "../layouts/Layout.astro";
         <span class="step-num">03</span>
         <h2>Los agentes analizan</h2>
         <p>
-          Ocho agentes especializados —Grace Hopper, Alan Kay, Barbara Liskov,
-          Roy Fielding, Hedy Lamarr, Donald Knuth, Lynn Conway y Tim
-          Berners-Lee— trabajan en paralelo sobre modelos open source
-          orquestados con Ollama. Ves su progreso en tiempo real.
+          Siete especialistas —Grace Hopper, Alan Kay, Barbara Liskov,
+          Roy Fielding, Hedy Lamarr, Donald Knuth y Lynn Conway— trabajan en
+          llamadas independientes, hasta tres a la vez. Margaret Hamilton
+          integra después el plano de reconstrucción. Ves su progreso en tiempo real.
         </p>
       </div>
       <div class="step-card">
@@ -62,6 +100,122 @@ import Layout from "../layouts/Layout.astro";
       </div>
     </section>
 
+    {extensionDownloadsEnabled && <section class="extension-section">
+      <div class="extension-copy">
+        <span class="extension-kicker">Extensión oficial</span>
+        <h2 class="agents-title extension-title">IWTBI dentro de GitHub</h2>
+        <p class="extension-desc">
+          La extensión despierta solo sobre repositorios válidos de GitHub,
+          inserta un acceso directo visible dentro de la propia página y te deja
+          crear el documento de reconstrucción con la URL ya preparada. Puedes
+          verla en modo destacado, compacto o no mostrarla.
+        </p>
+
+        <div class="extension-points">
+          <div class="extension-point">
+            <span class="extension-point-badge">01</span>
+            <div>
+              <strong>Icono activo solo en repos válidos</strong>
+              <span>Si no estás en un repo de GitHub, la extensión se queda dormida.</span>
+            </div>
+          </div>
+          <div class="extension-point">
+            <span class="extension-point-badge">02</span>
+            <div>
+              <strong>Banner en contexto y configurable</strong>
+              <span>Aparece bajo la cabecera del repo y puedes dejarlo visible o más discreto.</span>
+            </div>
+          </div>
+          <div class="extension-point">
+            <span class="extension-point-badge">03</span>
+            <div>
+              <strong>Configuración mínima, útil</strong>
+              <span>Activas o desactivas la inyección y eliges entre modo destacado o compacto.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="extension-downloads">
+          <a href="/downloads/iwtbi-extension-chrome.zip" class="ext-btn ext-btn-primary" download>
+            Descargar ZIP para Chrome
+          </a>
+          <a href="/downloads/iwtbi-extension-firefox.zip" class="ext-btn ext-btn-secondary" download>
+            Descargar ZIP para Firefox
+          </a>
+        </div>
+      </div>
+
+      <div class="extension-preview">
+        <div class="ext-browser">
+          <div class="ext-browser-top">
+            <div class="ext-tab">github.com/owner/repo</div>
+            <div class="ext-toolbar">
+              <span class="ext-tool-dot"></span>
+              <span class="ext-tool-dot ext-tool-dot-coral"></span>
+              <span class="ext-tool-dot"></span>
+            </div>
+          </div>
+          <div class="ext-injected-label">inyectado por la extensión</div>
+          <div class="ext-banner">
+            <div class="ext-banner-main">
+              <div class="ext-brand-icon">
+                <img src="/favicon.png" alt="IWTBI" />
+              </div>
+              <div class="ext-banner-copy">
+                <div class="ext-brandline">
+                  <span class="ext-brandword">IWTBI</span>
+                  <span class="ext-brandsub">for GitHub</span>
+                </div>
+                <span class="ext-chip">repo detectado</span>
+                <strong class="ext-banner-title">Analiza owner/repo con IWTBI</strong>
+                <span class="ext-banner-text">
+                  Convierte este repo en un documento Markdown autocontenido para reconstruirlo con una IA.
+                </span>
+              </div>
+            </div>
+            <a href="/analyze" class="ext-banner-btn">Crear documento →</a>
+          </div>
+        </div>
+
+        <div class="ext-config-demo">
+          <div class="ext-config-top">
+            <div>
+              <span class="ext-config-kicker">Configuración del banner</span>
+              <strong class="ext-config-title">Controla la inyección dentro de GitHub</strong>
+            </div>
+            <span class="ext-config-state">activa</span>
+          </div>
+          <div class="ext-config-card">
+            <div class="ext-config-row">
+              <div class="ext-config-copy">
+                <strong>Inyectar banner en el repo</strong>
+                <span>Cuando está activo, el acceso directo aparece debajo de la cabecera del repositorio.</span>
+              </div>
+              <div class="ext-toggle ext-toggle-on" aria-hidden="true">
+                <span class="ext-toggle-knob"></span>
+              </div>
+            </div>
+
+            <div class="ext-config-row ext-config-row-stack">
+              <div class="ext-config-copy">
+                <strong>Modo de inserción</strong>
+                <span>Usa el banner completo para verlo mejor o una versión compacta si quieres menos ruido.</span>
+              </div>
+              <div class="ext-mode-pills">
+                <span class="ext-mode-pill ext-mode-pill-active">Destacado</span>
+                <span class="ext-mode-pill">Compacto</span>
+              </div>
+            </div>
+
+            <p class="ext-config-note">
+              Si prefieres un GitHub más limpio, puedes ocultar el banner y seguir
+              lanzando IWTBI desde el icono de la extensión cuando lo necesites.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>}
+
     <!-- Sección de agentes -->
     <section class="agents-section">
       <h2 class="agents-title">Qué hace cada agente</h2>
@@ -69,42 +223,42 @@ import Layout from "../layouts/Layout.astro";
         <div class="agent-card">
           <span class="agent-card-name">Grace Hopper <a href="https://es.wikipedia.org/wiki/Grace_Hopper" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">Stack tecnológico</span>
-          <p class="agent-card-desc">Detecta lenguajes, frameworks y herramientas de build.</p>
+          <p class="agent-card-desc">Fija versiones, dependencias, comandos de build, variables y requisitos de ejecución.</p>
         </div>
         <div class="agent-card">
           <span class="agent-card-name">Alan Kay <a href="https://es.wikipedia.org/wiki/Alan_Kay" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">Arquitectura</span>
-          <p class="agent-card-desc">Mapea directorios, patrones y relaciones entre módulos.</p>
+          <p class="agent-card-desc">Reconstruye capas, rutas exactas, responsabilidades y relaciones con diagramas Mermaid.</p>
         </div>
         <div class="agent-card">
           <span class="agent-card-name">Barbara Liskov <a href="https://es.wikipedia.org/wiki/Barbara_Liskov" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">Base de datos</span>
-          <p class="agent-card-desc">Identifica esquemas, migraciones, ORMs y modelos de datos.</p>
+          <p class="agent-card-desc">Especifica modelos, tablas, migraciones, relaciones, restricciones y persistencia.</p>
         </div>
         <div class="agent-card">
           <span class="agent-card-name">Roy Fielding <a href="https://es.wikipedia.org/wiki/Roy_Fielding" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">API y contratos</span>
-          <p class="agent-card-desc">Documenta endpoints, métodos HTTP y contratos de datos.</p>
+          <p class="agent-card-desc">Detalla endpoints, autenticación, eventos, errores y contratos de entrada y salida.</p>
         </div>
         <div class="agent-card">
           <span class="agent-card-name">Hedy Lamarr <a href="https://es.wikipedia.org/wiki/Hedy_Lamarr" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">Frontend</span>
-          <p class="agent-card-desc">Analiza componentes, estilos y decisiones de interfaz.</p>
+          <p class="agent-card-desc">Describe pantallas, componentes, estados, navegación y comportamiento responsive.</p>
         </div>
         <div class="agent-card">
           <span class="agent-card-name">Donald Knuth <a href="https://es.wikipedia.org/wiki/Donald_Knuth" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">Lógica de negocio</span>
-          <p class="agent-card-desc">Extrae reglas de negocio, flujos y algoritmos clave.</p>
+          <p class="agent-card-desc">Extrae reglas, estados, algoritmos, casos límite y criterios funcionales verificables.</p>
         </div>
         <div class="agent-card">
           <span class="agent-card-name">Lynn Conway <a href="https://es.wikipedia.org/wiki/Lynn_Conway" target="_blank" rel="noopener" class="wiki-link">i</a></span>
           <span class="agent-card-area">DevOps y despliegue</span>
-          <p class="agent-card-desc">Revisa contenedores, CI/CD y configuración de entornos.</p>
+          <p class="agent-card-desc">Define contenedores, entornos, CI/CD, observabilidad y pasos de despliegue.</p>
         </div>
         <div class="agent-card agent-card-integrador">
-          <span class="agent-card-name">Tim Berners-Lee <a href="https://es.wikipedia.org/wiki/Tim_Berners-Lee" target="_blank" rel="noopener" class="wiki-link">i</a></span>
-          <span class="agent-card-area">Integrador</span>
-          <p class="agent-card-desc">Unifica los siete análisis en un documento final coherente.</p>
+          <span class="agent-card-name">Margaret Hamilton <a href="https://es.wikipedia.org/wiki/Margaret_Hamilton_(cient%C3%ADfica)" target="_blank" rel="noopener" class="wiki-link">i</a></span>
+          <span class="agent-card-area">Integración y validación</span>
+          <p class="agent-card-desc">Cruza las siete especificaciones y crea el orden de construcción, criterios globales, evidencias e incógnitas sin borrar su detalle.</p>
         </div>
       </div>
     </section>
@@ -153,8 +307,9 @@ import Layout from "../layouts/Layout.astro";
         <div class="obj-panel obj-panel-solution">
           <span class="obj-label">Con IWTBI</span>
           <p class="obj-tagline">
-            Un <strong>documento de contexto estructurado</strong> listo para
-            que Claude Code, Gemini CLI o Codex CLI reconstruyan el producto.
+            Un <strong>documento de reconstrucción autocontenido</strong> que
+            puedes copiar o descargar y entregar a Claude Code, Gemini CLI o
+            Codex CLI para volver a construir el producto.
           </p>
           <ul class="obj-list obj-list-solution">
             <li>
@@ -191,21 +346,21 @@ import Layout from "../layouts/Layout.astro";
       </div>
     </section>
 
-    <!-- Sección: pipeline con Ollama -->
+    <!-- Sección: pipeline de análisis -->
     <section class="pipeline-section">
-      <h2 class="agents-title">Modelos open source sobre Ollama</h2>
+      <h2 class="agents-title">Un pipeline especializado y verificable</h2>
       <div class="pipeline-features">
         <div class="pipe-feat">
-          <span class="pipe-feat-label">Ollama local</span>
-          <p class="pipe-feat-desc">Modelos open source gestionados en el servidor. Sin llamadas a APIs de terceros.</p>
+          <span class="pipe-feat-label">Proveedores con respaldo</span>
+          <p class="pipe-feat-desc">NaN ejecuta el análisis principal y el sistema puede continuar con Ollama Cloud o z.ai si el proveedor falla.</p>
         </div>
         <div class="pipe-feat">
           <span class="pipe-feat-label">Contexto especializado</span>
           <p class="pipe-feat-desc">Cada agente recibe solo los ficheros relevantes para su área. Menos ruido, mejor análisis.</p>
         </div>
         <div class="pipe-feat pipe-feat-highlight">
-          <span class="pipe-feat-label">8 agentes en paralelo</span>
-          <p class="pipe-feat-desc">Trabajan simultáneamente. Tim Berners-Lee integra los resultados en un único documento coherente.</p>
+          <span class="pipe-feat-label">Concurrencia controlada</span>
+          <p class="pipe-feat-desc">Los siete especialistas trabajan en lotes 3 + 3 + 1. Después, Margaret Hamilton valida el conjunto y prepara el plano transversal.</p>
         </div>
         <div class="pipe-feat">
           <span class="pipe-feat-label">Streaming en tiempo real</span>
@@ -248,7 +403,7 @@ import Layout from "../layouts/Layout.astro";
           </div>
           <div class="term-step">
             <span class="term-num">[3/6]</span>
-            <span class="term-label">Ejecutando Pipeline Ollama</span>
+            <span class="term-label">Ejecutando especialistas (máx. 3)</span>
             <span class="term-fill"></span>
             <span class="term-ok">&#10003;</span>
           </div>
@@ -257,17 +412,17 @@ import Layout from "../layouts/Layout.astro";
             Grace Hopper &middot; Alan Kay &middot; Barbara Liskov &middot; Roy Fielding
           </div>
           <div class="term-agents term-agents-cont">
-            &nbsp;&nbsp;&nbsp;Hedy Lamarr &middot; Donald Knuth &middot; Lynn Conway &middot; Tim Berners-Lee
+            &nbsp;&nbsp;&nbsp;Hedy Lamarr &middot; Donald Knuth &middot; Lynn Conway
           </div>
           <div class="term-step">
             <span class="term-num">[4/6]</span>
-            <span class="term-label">Generando documento de contexto</span>
+            <span class="term-label">Margaret Hamilton: integración y validación</span>
             <span class="term-fill"></span>
             <span class="term-ok">&#10003;</span>
           </div>
           <div class="term-step">
             <span class="term-num">[5/6]</span>
-            <span class="term-label">Exportando &rarr; Claude &middot; Gemini &middot; Codex</span>
+            <span class="term-label">Documento listo &rarr; copiar o descargar Markdown</span>
             <span class="term-fill"></span>
             <span class="term-ok">&#10003;</span>
           </div>
@@ -280,7 +435,7 @@ import Layout from "../layouts/Layout.astro";
 
           <div class="term-spacer"></div>
           <p class="term-meta">
-            Análisis completado &nbsp;&middot;&nbsp; ~3&ndash;5 min &nbsp;&middot;&nbsp; 8 agentes en paralelo
+            Análisis completado &nbsp;&middot;&nbsp; 7 especialistas &nbsp;&middot;&nbsp; máximo 3 llamadas simultáneas
           </p>
         </div>
 
@@ -292,10 +447,10 @@ import Layout from "../layouts/Layout.astro";
       <div class="url-trick-text">
         <h2>Magic URL</h2>
         <p class="url-example">
-          github.com/usuario/repo &nbsp;&rarr;&nbsp; app.example.com/usuario/repo
+          github.com/usuario/repo &nbsp;&rarr;&nbsp; {APP_HOST}/usuario/repo
         </p>
         <p class="url-hint">
-          Cambia dos palabras en la barra del navegador. Sin instalar nada.
+          Si no quieres instalar nada, esta sigue siendo la forma más rápida.
         </p>
       </div>
       <a href="/analyze" class="btn-try">Analizar</a>
@@ -305,57 +460,10 @@ import Layout from "../layouts/Layout.astro";
 </Layout>
 
 <style>
-  /* ── Navbar ── */
-  nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 32px;
-    height: 72px;
-    border-bottom: var(--border);
-    background: var(--white);
-  }
-  .logo {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-  }
-  .nav-links {
-    display: flex;
-    gap: 32px;
-    font-size: 0.9rem;
-  }
-  .nav-links a::before {
-    content: "";
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    background: var(--coral);
-    border-radius: 50%;
-    margin-right: 6px;
-    vertical-align: middle;
-  }
-  .nav-links a:hover {
-    text-decoration: underline;
-  }
-  .active {
-    font-weight: 700;
-  }
-  .btn-nav {
-    background: var(--coral);
-    border: var(--border);
-    box-shadow: var(--shadow-dark);
-    padding: 8px 20px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    transition: transform 0.1s, box-shadow 0.1s;
-  }
-  .btn-nav:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0 var(--black);
-  }
-
   /* ── Hero ── */
   main {
+    width: 100%;
+    min-width: 0;
     max-width: 960px;
     margin: 0 auto;
     padding: 64px 32px 80px;
@@ -410,6 +518,438 @@ import Layout from "../layouts/Layout.astro";
     color: var(--mid);
     line-height: 1.6;
   }
+
+  /* ── Extensión ── */
+  .extension-section {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 28px;
+    margin-bottom: 48px;
+    align-items: start;
+  }
+  .extension-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .extension-kicker {
+    width: fit-content;
+    padding: 6px 12px;
+    border: var(--border);
+    border-radius: 999px;
+    background: var(--coral);
+    box-shadow: 3px 3px 0 var(--black);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .extension-title {
+    margin-bottom: 0;
+  }
+  .extension-desc {
+    font-size: 0.94rem;
+    line-height: 1.65;
+    color: var(--mid);
+    max-width: 58ch;
+  }
+  .extension-points {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .extension-point {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 16px 18px;
+    border: var(--border);
+    background: var(--white);
+    box-shadow: var(--shadow);
+  }
+  .extension-point-badge {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .extension-point div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .extension-point strong {
+    font-size: 0.84rem;
+    color: var(--black);
+  }
+  .extension-point span:last-child {
+    font-size: 0.82rem;
+    color: var(--mid);
+    line-height: 1.5;
+  }
+  .extension-downloads {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .extension-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .ext-browser {
+    border: var(--border);
+    box-shadow: var(--shadow);
+    background: #eef5ff;
+    overflow: hidden;
+  }
+  .ext-browser-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: var(--border);
+    background: #f5f7fb;
+  }
+  .ext-tab {
+    padding: 8px 14px;
+    border: var(--border);
+    background: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .ext-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ext-tool-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--black);
+  }
+  .ext-tool-dot-coral {
+    background: var(--coral);
+  }
+  .ext-injected-label {
+    padding: 10px 18px 0;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f28f7d;
+  }
+  .ext-banner {
+    margin: 18px;
+    padding: 18px 20px;
+    border: var(--border);
+    background:
+      linear-gradient(180deg, rgba(255, 181, 167, 0.26) 0%, rgba(255, 181, 167, 0) 42%),
+      var(--white);
+    box-shadow: 6px 6px 0 var(--coral);
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    position: relative;
+  }
+  .ext-banner::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 8px;
+    background: linear-gradient(90deg, #f28f7d, var(--coral));
+  }
+  .ext-banner-main {
+    display: flex;
+    gap: 14px;
+    min-width: 0;
+  }
+  .ext-brand-icon {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border: var(--border);
+    background: var(--coral);
+    box-shadow: 3px 3px 0 var(--black);
+    border-radius: 10px;
+  }
+  .ext-brand-icon img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+  .ext-banner-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .ext-brandline {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 1;
+  }
+  .ext-brandword {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    color: var(--black);
+  }
+  .ext-brandsub {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f28f7d;
+  }
+  .ext-chip {
+    width: fit-content;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 2px solid var(--black);
+    background: var(--coral);
+    font-size: 0.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ext-banner-title {
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    line-height: 1.1;
+  }
+  .ext-banner-text {
+    font-size: 0.79rem;
+    line-height: 1.45;
+    color: var(--mid);
+  }
+  .ext-banner-btn {
+    align-self: center;
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--border);
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .ext-banner-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--coral);
+  }
+  .ext-config-demo {
+    border: var(--border);
+    background: #f9fbff;
+    box-shadow: var(--shadow);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ext-config-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .ext-config-kicker {
+    display: inline-block;
+    margin-bottom: 6px;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f28f7d;
+  }
+  .ext-config-title {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    line-height: 1.05;
+    color: var(--black);
+  }
+  .ext-config-state {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: var(--border);
+    background: #eaf7ee;
+    color: #166534;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .ext-config-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: var(--border);
+    background:
+      linear-gradient(180deg, rgba(255, 181, 167, 0.22) 0%, rgba(255, 181, 167, 0) 36%),
+      var(--white);
+  }
+  .ext-config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .ext-config-row-stack {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .ext-config-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ext-config-copy strong {
+    font-size: 0.84rem;
+    color: var(--black);
+  }
+  .ext-config-copy span {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--mid);
+  }
+  .ext-toggle {
+    width: 46px;
+    height: 26px;
+    position: relative;
+    flex-shrink: 0;
+    border: var(--border);
+    border-radius: 999px;
+    background: #f3d9d2;
+  }
+  .ext-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--black);
+    transition: transform 0.12s ease;
+  }
+  .ext-toggle-on {
+    background: var(--coral);
+  }
+  .ext-toggle-on .ext-toggle-knob {
+    transform: translateX(18px);
+  }
+  .ext-mode-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ext-mode-pill {
+    min-height: 36px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--border);
+    border-radius: 999px;
+    background: var(--white);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .ext-mode-pill-active {
+    background: var(--coral);
+    box-shadow: 2px 2px 0 var(--black);
+  }
+  .ext-config-note {
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--mid);
+  }
+  .ext-btn {
+    min-height: 46px;
+    padding: 0 18px;
+    border: var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-align: center;
+    transition: transform 0.1s, box-shadow 0.1s, opacity 0.1s;
+  }
+  .ext-btn:hover {
+    transform: translate(-2px, -2px);
+  }
+  .ext-btn-primary {
+    background: var(--black);
+    color: var(--white);
+    box-shadow: 3px 3px 0 var(--coral);
+  }
+  .ext-btn-primary:hover {
+    box-shadow: 5px 5px 0 var(--coral);
+  }
+  .ext-btn-secondary {
+    background: var(--coral);
+    color: var(--black);
+    box-shadow: 2px 2px 0 var(--black);
+  }
+  .ext-btn-secondary:hover {
+    box-shadow: 4px 4px 0 var(--black);
+  }
+  @media (max-width: 860px) {
+    .extension-section {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 640px) {
+    main {
+      padding: 40px 18px 64px;
+    }
+    .steps-grid {
+      grid-template-columns: 1fr;
+    }
+    .ext-banner {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .ext-banner-btn {
+      width: 100%;
+    }
+    .extension-downloads {
+      flex-direction: column;
+    }
+    .extension-downloads .ext-btn {
+      width: 100%;
+    }
+    .ext-config-top,
+    .ext-config-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
   code {
     font-family: var(--font-mono);
     font-size: 0.8em;
@@ -435,7 +975,7 @@ import Layout from "../layouts/Layout.astro";
     gap: 12px;
   }
   @media (max-width: 640px) {
-    .agents-grid { grid-template-columns: 1fr 1fr; }
+    .agents-grid { grid-template-columns: 1fr; }
   }
   .agent-card {
     border: var(--border);
@@ -599,7 +1139,7 @@ import Layout from "../layouts/Layout.astro";
     line-height: 1.5;
   }
 
-  /* ── Pipeline Ollama ── */
+  /* ── Pipeline de análisis ── */
   .pipeline-section {
     margin-bottom: 48px;
   }
@@ -613,7 +1153,7 @@ import Layout from "../layouts/Layout.astro";
     margin-bottom: 24px;
   }
   @media (max-width: 640px) {
-    .pipeline-features { grid-template-columns: 1fr 1fr; }
+    .pipeline-features { grid-template-columns: 1fr; }
   }
   .pipe-feat {
     padding: 20px 18px;
@@ -625,10 +1165,10 @@ import Layout from "../layouts/Layout.astro";
   }
   .pipe-feat:last-child { border-right: none; }
   @media (max-width: 640px) {
-    .pipe-feat:nth-child(2) { border-right: none; }
+    .pipe-feat { border-right: none; }
+    .pipe-feat:nth-child(2),
     .pipe-feat:nth-child(3),
     .pipe-feat:nth-child(4) { border-top: var(--border); }
-    .pipe-feat:nth-child(4) { border-right: none; }
   }
   .pipe-feat-highlight { background: var(--coral); }
   .pipe-feat-label {
@@ -774,6 +1314,33 @@ import Layout from "../layouts/Layout.astro";
     margin-top: 6px;
   }
 
+  @media (max-width: 640px) {
+    .term-body {
+      padding: 18px 14px 20px;
+    }
+    .term-prompt,
+    .term-step,
+    .term-agents,
+    .term-meta {
+      overflow-wrap: anywhere;
+    }
+    .term-step {
+      align-items: flex-start;
+      line-height: 1.55;
+      margin-bottom: 7px;
+    }
+    .term-label {
+      white-space: normal;
+      flex-shrink: 1;
+    }
+    .term-fill {
+      display: none;
+    }
+    .term-agents {
+      padding-left: 0;
+    }
+  }
+
   /* ── Banner truco de URL ── */
   .url-trick {
     background: var(--black);
@@ -816,6 +1383,20 @@ import Layout from "../layouts/Layout.astro";
     opacity: 0.85;
   }
 
+  @media (max-width: 640px) {
+    .url-trick {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 28px 22px;
+    }
+    .url-example {
+      overflow-wrap: anywhere;
+    }
+    .btn-try {
+      text-align: center;
+    }
+  }
+
   /* ── Footer ── */
   footer {
     height: 56px;
@@ -845,9 +1426,4 @@ import Layout from "../layouts/Layout.astro";
     color: var(--white);
   }
 
-  @media (max-width: 480px) {
-    .agents-grid {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>

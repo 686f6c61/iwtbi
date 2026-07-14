@@ -6,7 +6,7 @@ The application ships as a small monorepo:
 
 - `frontend/`: Astro static site served by nginx
 - `backend/`: FastAPI API, analysis orchestration, caching, and email fanout
-- `backend/supabase/`: canonical SQL schema for saved analyses and notifications
+- `backend/postgres/`: canonical SQL schema for saved analyses and notifications
 - `ops/`: deployment examples
 
 ## Home screenshot
@@ -18,7 +18,7 @@ The application ships as a small monorepo:
 - Measures a repository before analysis to decide whether it fits the safe context budget.
 - Runs a multi-agent backend pipeline over the cloned repository.
 - Streams progress to the browser through Server-Sent Events (SSE).
-- Saves completed analyses to Supabase and exposes them in a public library.
+- Saves completed analyses to internal PostgreSQL and exposes them in a public library.
 - Optionally emails users when an analysis finishes.
 
 ## Core product flow
@@ -30,9 +30,9 @@ flowchart LR
     C --> D["POST /api/analyze"]
     D --> E["Clone repository"]
     E --> F["Read and prioritize files"]
-    F --> G["7 analysis agents in parallel"]
-    G --> H["Synthesize final document"]
-    H --> I["Persist in Supabase"]
+    F --> G["7 specialists in batches of up to 3"]
+    G --> H["Hamilton integration and validation"]
+    H --> I["Persist in PostgreSQL"]
     H --> J["Stream completion to browser"]
     I --> K["Library page"]
     I --> L["Optional email notification"]
@@ -44,10 +44,25 @@ flowchart LR
 flowchart TB
     Browser["Astro frontend"] -->|HTTP + SSE| API["FastAPI backend"]
     API -->|clone| GitHub["Public GitHub repos"]
-    API -->|cache + library| Supabase["Supabase"]
+    API -->|cache + library| Postgres["PostgreSQL"]
     API -->|email| Resend["Resend"]
-    API -->|LLM calls| Provider["z.ai or Ollama Cloud"]
+    API -->|LLM calls| Provider["Your OpenAI-compatible API or a built-in provider profile"]
 ```
+
+## Analysis agents
+
+- Grace Hopper: stack, versions, dependencies and build commands.
+- Alan Kay: architecture, modules, exact paths and relationships.
+- Barbara Liskov: data models, schemas, migrations and persistence.
+- Roy Fielding: APIs, authentication, events and data contracts.
+- Hedy Lamarr: screens, components, states and responsive behavior.
+- Donald Knuth: business rules, algorithms and edge cases.
+- Lynn Conway: environments, containers, CI/CD and deployment.
+- Margaret Hamilton: cross-cutting build order, global acceptance criteria,
+  evidence and unresolved questions. Specialist sections remain intact.
+
+The seven specialists run as independent LLM calls in batches of at most three.
+Hamilton runs after them as a separate integration call.
 
 ## Repository layout
 
@@ -56,7 +71,7 @@ flowchart TB
 |- backend/
 |  |- app/
 |  |- tests/
-|  `- supabase/
+|  `- postgres/
 |- frontend/
 |  |- src/
 |  `- public/
@@ -67,16 +82,15 @@ flowchart TB
 
 ## Quick start
 
-1. Copy the root example file:
+1. Create a private `.env` with fresh local secrets:
 
    ```bash
-   cp .env.example .env
+   ./scripts/init-self-host.sh
    ```
 
-2. Fill in at least:
-   - one model provider
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_KEY`
+2. Add your own AI endpoint, model and API key to `.env`. The default
+   `openai_compatible` profile works with OpenAI-compatible services. NaN,
+   z.ai and Ollama Cloud profiles are also available.
 
 3. Start the stack:
 
@@ -88,17 +102,18 @@ flowchart TB
    - frontend: [http://localhost:3410](http://localhost:3410)
    - backend health: [http://localhost:8410/health](http://localhost:8410/health)
 
-5. Initialize Supabase:
+5. PostgreSQL starts empty and applies the schema automatically. Initialize it
+   manually only when running without Docker Compose:
 
    ```bash
-   psql "<your-postgres-connection-string>" -f backend/supabase/schema.sql
+   psql "$DATABASE_URL" -f backend/postgres/schema.sql
    ```
 
-   You can also paste the file into the Supabase SQL editor.
+   The default Docker Compose stack starts PostgreSQL and applies this schema
+   automatically on first boot.
 
 ## Documentation
 
-- [IWTBI self-analysis brief](IWTBI_ANALYSIS.md)
 - [Getting started](docs/getting-started.md)
 - [Configuration reference](docs/configuration.md)
 - [Architecture](docs/architecture.md)

@@ -5,7 +5,7 @@ Temperatura 0.0: extracción factual estricta de rutas, métodos, schemas
 y códigos de respuesta directamente desde los archivos del repositorio.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Roy Fielding, un agente especializado en APIs y contratos de interfaz.
 
@@ -13,7 +13,7 @@ Tu tarea es generar la sección "## API y contratos" de un documento cuyo único
 
 REGLAS DE ESCRITURA:
 - Escribe en párrafos narrativos que expliquen el diseño de la API y las decisiones tomadas.
-- Incluye un diagrama Mermaid sequenceDiagram para el flujo más representativo del sistema (el happy path del endpoint principal). No hagas un diagrama por cada endpoint.
+- Incluye un diagrama Mermaid sequenceDiagram para el flujo más representativo del sistema. Añade otros diagramas solo cuando documenten contratos o flujos materialmente distintos.
 - Documenta los contratos con ejemplos reales extraídos del código, no inventados.
 - Si no hay API HTTP, documenta la interfaz pública del módulo principal con la misma profundidad.
 - Los nombres de rutas, métodos y campos deben coincidir exactamente con los que aparecen en el código.
@@ -64,8 +64,8 @@ class ApiAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "hermes"
+        return "fielding"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

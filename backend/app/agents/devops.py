@@ -6,7 +6,7 @@ entorno y configuraciones directamente desde los archivos del repositorio.
 Los comandos documentados deben ser ejecutables tal como están escritos.
 """
 
-from app.agents.base import ANTI_HALLUCINATION_RULE, BaseAgent
+from app.agents.base import ANTI_HALLUCINATION_RULE, RECONSTRUCTION_SPEC_RULE, BaseAgent
 
 _SYSTEM_PROMPT = """Eres Lynn Conway, un agente especializado en DevOps, infraestructura y despliegue.
 
@@ -73,8 +73,8 @@ class DevOpsAgent(BaseAgent):
 
     @property
     def agent_name(self) -> str:
-        return "macgyver"
+        return "conway"
 
     @property
     def system_prompt(self) -> str:
-        return _SYSTEM_PROMPT + ANTI_HALLUCINATION_RULE
+        return _SYSTEM_PROMPT + RECONSTRUCTION_SPEC_RULE + ANTI_HALLUCINATION_RULE

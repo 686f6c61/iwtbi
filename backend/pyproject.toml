@@ -13,9 +13,10 @@ dependencies = [
     "pydantic[email]",
     "httpx",
     "python-dotenv",
-    "supabase",
     "resend",
-    "slowapi",  # rate limiting por IP sobre FastAPI
+    "redis",
+    "slowapi", # rate limiting por IP sobre FastAPI
+    "psycopg[binary]>=3.3.4",
 ]
 
 [project.optional-dependencies]

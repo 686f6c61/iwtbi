@@ -8,6 +8,7 @@ lo que elimina rate limits y permite acceso a todos los archivos sin paginación
 
 import asyncio
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -31,6 +32,14 @@ CLONE_RETRY_BASE_DELAY_SECONDS = 2
 
 class RepoSizeLimitExceeded(RuntimeError):
     """El repositorio supera el límite de tamaño permitido por la plataforma."""
+
+    def __init__(self, *, size_kb: int, limit_kb: int) -> None:
+        self.size_kb = size_kb
+        self.limit_kb = limit_kb
+        super().__init__(
+            f"El repositorio ocupa ~{size_kb // 1024} MB, que supera el límite "
+            f"de {limit_kb // 1024} MB permitido."
+        )
 
 
 def validate_github_url(url: str) -> bool:
@@ -84,7 +93,7 @@ class GitCloner:
         prevenir inyección de comandos.
 
         Tras el clonado ejecuta ``git rev-parse HEAD`` para obtener el SHA
-        exacto del commit descargado. Este SHA se usa para el caché en Supabase.
+        exacto del commit descargado. Este SHA se usa para el caché persistido.
 
         Args:
             repo_url: URL del repositorio GitHub público.
@@ -112,6 +121,8 @@ class GitCloner:
             proc = await asyncio.create_subprocess_exec(
                 "git",
                 "-c",
+                "credential.helper=",
+                "-c",
                 "http.version=HTTP/1.1",
                 "clone",
                 "--depth=1",
@@ -119,6 +130,7 @@ class GitCloner:
                 str(dest),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_build_git_env(),
             )
 
             try:
@@ -194,10 +206,7 @@ class GitCloner:
 
         limit_kb = settings.repo_size_limit_mb * 1024
         if size_kb > limit_kb:
-            raise RepoSizeLimitExceeded(
-                f"El repositorio ocupa ~{size_kb // 1024} MB, que supera el límite "
-                f"de {settings.repo_size_limit_mb} MB permitido."
-            )
+            raise RepoSizeLimitExceeded(size_kb=size_kb, limit_kb=limit_kb)
 
     async def _get_head_sha(self, clone_path: Path) -> str:
         """
@@ -263,5 +272,22 @@ def _is_retryable_clone_error(stderr_text: str) -> bool:
         "http/2 stream",
         "operation timed out",
         "connection timed out",
+        "could not read username for 'https://github.com'",
+        "terminal prompts disabled",
     )
     return any(marker in message for marker in transient_markers)
+
+
+def _build_git_env() -> dict[str, str]:
+    """
+    Construye un entorno mínimo y no interactivo para comandos git.
+
+    El backend nunca debe quedarse esperando credenciales por stdin. Si GitHub
+    devuelve una respuesta extraña o un reto transitorio, preferimos fallar
+    rápido y reintentar de forma controlada.
+    """
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_ASKPASS"] = "true"
+    env.setdefault("HOME", tempfile.gettempdir())
+    return env

@@ -11,7 +11,6 @@
  * a través del botón «Changelog» del footer. Los datos se serializan en
  * tiempo de build desde src/data/changelog.ts.
  */
-import { CHANGELOG } from "../data/changelog";
 import Navbar from "../components/Navbar.astro";
 import Footer from "../components/Footer.astro";
 
@@ -22,16 +21,28 @@ interface Props {
   keywords?: string;
   /** Ruta absoluta a la imagen Open Graph (relativa a /public). Por defecto /og-image.png. */
   ogImage?: string;
+  /** Tipo Open Graph. Por defecto website. */
+  ogType?: "website" | "article";
   /** Sección activa del navbar para resaltar el enlace correspondiente. */
   activeLink?: "como-funciona" | "biblioteca";
   /** Texto del botón CTA del navbar. Por defecto «Nuevo análisis». */
   navCtaText?: string;
   /** Destino del botón CTA del navbar. Por defecto «/». */
   navCtaHref?: string;
+  /** Control fino del meta robots. */
+  robots?: string;
+  /** Marca la página como no indexable. */
+  noindex?: boolean;
+  /** JSON-LD adicional para la página actual. */
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
 }
 
-const SITE_URL = "https://app.example.com";
-const GA_MEASUREMENT_ID = "G-GRMZ1R10S6";
+const SITE_URL = (import.meta.env.PUBLIC_APP_URL ?? "http://localhost:3410").replace(/\/+$/, "");
+const AUTHOR_URL = import.meta.env.PUBLIC_AUTHOR_URL ?? "";
+const SOURCE_URL = import.meta.env.PUBLIC_SOURCE_URL ?? "";
+const SOCIAL_HANDLE = import.meta.env.PUBLIC_SOCIAL_HANDLE ?? "";
+const LINKEDIN_URL = import.meta.env.PUBLIC_LINKEDIN_URL ?? "";
+const SITE_NAME = "IWTBI";
 const DEFAULT_DESCRIPTION =
   "Analiza cualquier repositorio público de GitHub y genera documentación exhaustiva lista para reconstruirlo con Claude Code, Gemini CLI o Codex CLI.";
 const DEFAULT_KEYWORDS =
@@ -42,16 +53,43 @@ const {
   description = DEFAULT_DESCRIPTION,
   keywords = DEFAULT_KEYWORDS,
   ogImage = "/og-image.png",
+  ogType = "website",
   activeLink,
   navCtaText = "Nuevo análisis",
   navCtaHref = "/",
+  robots,
+  noindex = false,
+  structuredData,
 } = Astro.props;
 
 /** URL canónica: usa la ruta actual dentro del dominio de producción. */
 const canonicalUrl = new URL(Astro.url.pathname, SITE_URL).toString();
 const ogImageAbsolute = new URL(ogImage, SITE_URL).toString();
+const pageTitle = `${title} — ${SITE_NAME}`;
+const robotsContent = noindex ? "noindex, follow" : (robots ?? "index, follow");
 
-const changelogJson = JSON.stringify(CHANGELOG);
+const structuredDataItems = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: SITE_URL,
+    logo: new URL("/og-image.png", SITE_URL).toString(),
+    sameAs: [AUTHOR_URL, SOURCE_URL, LINKEDIN_URL].filter(Boolean),
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: SITE_URL,
+    inLanguage: "es-ES",
+    description,
+  },
+  ...(structuredData
+    ? (Array.isArray(structuredData) ? structuredData : [structuredData])
+    : []),
+];
+const structuredDataJson = JSON.stringify(structuredDataItems);
 ---
 
 <!doctype html>
@@ -61,11 +99,16 @@ const changelogJson = JSON.stringify(CHANGELOG);
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- ── SEO base ── -->
-    <title>{title} — IWTBI</title>
+    <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <meta name="keywords" content={keywords} />
-    <meta name="author" content="IWTBI" />
+    <meta name="author" content={SITE_NAME} />
     <link rel="canonical" href={canonicalUrl} />
+    <meta name="robots" content={robotsContent} />
+    <meta name="googlebot" content={robotsContent} />
+    <meta name="format-detection" content="telephone=no, email=no, address=no" />
+    <link rel="alternate" hrefLang="es-ES" href={canonicalUrl} />
+    <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
 
     <!-- ── Favicon ── -->
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -73,11 +116,12 @@ const changelogJson = JSON.stringify(CHANGELOG);
 
     <!-- ── Open Graph — cubre Facebook, LinkedIn, WhatsApp, Telegram, iMessage… ── -->
     <!-- El protocolo OG es el estándar universal de previsualización en redes sociales. -->
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:title" content={`${title} — IWTBI`} />
+    <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImageAbsolute} />
+    <meta property="og:image:secure_url" content={ogImageAbsolute} />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
@@ -87,45 +131,28 @@ const changelogJson = JSON.stringify(CHANGELOG);
 
     <!-- ── Twitter / X Card ── -->
     <!-- summary_large_image muestra imagen grande en el tweet; summary muestra miniatura. -->
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:site" content="@iwtbi" />
+    <meta name="twitter:card" content="summary_large_image" />
+    {SOCIAL_HANDLE && <meta name="twitter:site" content={SOCIAL_HANDLE} />}
     <meta name="twitter:url" content={canonicalUrl} />
-    <meta name="twitter:title" content={`${title} — IWTBI`} />
+    <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImageAbsolute} />
     <meta name="twitter:image:alt" content="Logo de IWTBI — I Want To Build It" />
 
     <!-- ── LinkedIn específico ── -->
     <!-- LinkedIn usa OG estándar; estos refuerzan la autoría y el tipo de contenido. -->
-    <meta property="article:author" content="https://www.linkedin.com/company/iwtbi" />
+    {LINKEDIN_URL && <meta property="article:author" content={LINKEDIN_URL} />}
 
     <!-- ── Buscadores ── -->
     <!-- theme-color afecta a la barra de navegación en Chrome para Android. -->
     <meta name="theme-color" content="#000000" />
     <meta name="application-name" content="IWTBI" />
 
-    <!-- ── Robots ── -->
-    <meta name="robots" content="index, follow" />
-
-    <!-- ── Google Analytics 4 ── -->
-    <!-- El script externo se carga con async: no bloquea el parse ni el render.     -->
-    <!-- El snippet inline se emite como script clásico (is:inline) para preservar   -->
-    <!-- window.dataLayer y la función gtag() global que espera el SDK de GA.        -->
-    <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
-    <script is:inline define:vars={{ gaMeasurementId: GA_MEASUREMENT_ID }}>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() { dataLayer.push(arguments); }
-      gtag('js', new Date());
-      gtag('config', gaMeasurementId);
-    </script>
+    <script type="application/ld+json" set:html={structuredDataJson}></script>
 
     <!-- ── Fuentes ── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Public+Sans:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preload" href="/fonts/archivo-black-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <Navbar activeLink={activeLink} ctaText={navCtaText} ctaHref={navCtaHref} />
@@ -147,107 +174,86 @@ const changelogJson = JSON.stringify(CHANGELOG);
       </div>
     </div>
 
-    <script define:vars={{ changelogJson }}>
-      /**
-       * Inicializa el modal del changelog.
-       *
-       * Los datos proceden de changelogJson, serializado en build time desde
-       * src/data/changelog.ts, por lo que no se necesita ningún fetch en runtime.
-       */
-      window.__CHANGELOG__ = JSON.parse(changelogJson);
+    <script>
+      let changelogModulePromise;
 
-      const CATEGORY_META = {
-        added:   { label: "Añadido",   cls: "cl-cat-added"   },
-        changed: { label: "Modificado", cls: "cl-cat-changed" },
-        fixed:   { label: "Corregido", cls: "cl-cat-fixed"   },
-      };
-
-      /** Construye el DOM de una entrada de versión usando métodos seguros (sin innerHTML). */
-      function buildVersionBlock(entry, isLatest) {
-        const wrap = document.createElement("div");
-        wrap.className = "cl-version";
-
-        // Cabecera: badge de versión + fecha
-        const head = document.createElement("div");
-        head.className = "cl-version-head";
-
-        const badge = document.createElement("span");
-        badge.className = isLatest ? "cl-badge cl-badge-latest" : "cl-badge";
-        badge.textContent = `v${entry.version}`;
-        head.appendChild(badge);
-
-        const date = document.createElement("span");
-        date.className = "cl-date";
-        date.textContent = entry.date;
-        head.appendChild(date);
-
-        wrap.appendChild(head);
-
-        // Secciones de categoría
-        for (const section of entry.sections) {
-          const meta = CATEGORY_META[section.type] ?? CATEGORY_META.added;
-
-          const catLabel = document.createElement("span");
-          catLabel.className = `cl-cat ${meta.cls}`;
-          catLabel.textContent = meta.label;
-          wrap.appendChild(catLabel);
-
-          const list = document.createElement("ul");
-          list.className = "cl-list";
-          for (const item of section.items) {
-            const li = document.createElement("li");
-            li.textContent = item;
-            list.appendChild(li);
-          }
-          wrap.appendChild(list);
-        }
-
-        return wrap;
+      function getChangelogModule() {
+        changelogModulePromise ??= import("../scripts/changelog-modal");
+        return changelogModulePromise;
       }
 
-      function renderChangelog() {
-        const scroll = document.getElementById("cl-scroll");
-        if (!scroll || scroll.childElementCount > 0) return;
-
-        const entries = window.__CHANGELOG__;
-        entries.forEach((entry, i) => {
-          if (i > 0) {
-            const sep = document.createElement("hr");
-            sep.className = "cl-sep";
-            scroll.appendChild(sep);
-          }
-          scroll.appendChild(buildVersionBlock(entry, i === 0));
-        });
+      async function openChangelog() {
+        const changelog = await getChangelogModule();
+        changelog.openChangelog();
       }
 
-      function openChangelog() {
-        renderChangelog();
-        const overlay = document.getElementById("cl-overlay");
-        overlay?.classList.remove("cl-hidden");
-        document.body.style.overflow = "hidden";
+      async function closeChangelog() {
+        const changelog = await getChangelogModule();
+        changelog.closeChangelog();
       }
 
-      function closeChangelog() {
-        document.getElementById("cl-overlay")?.classList.add("cl-hidden");
-        document.body.style.overflow = "";
-      }
-
-      // Exponer openChangelog globalmente para que el botón del footer lo llame
       window.__openChangelog = openChangelog;
 
       document.addEventListener("DOMContentLoaded", () => {
-        document.getElementById("cl-close")?.addEventListener("click", closeChangelog);
+        document.getElementById("cl-close")?.addEventListener("click", () => {
+          void closeChangelog();
+        });
         document.getElementById("cl-overlay")?.addEventListener("click", (e) => {
-          if (e.target === e.currentTarget) closeChangelog();
+          if (e.target === e.currentTarget) {
+            void closeChangelog();
+          }
         });
         document.querySelector("[data-action='open-changelog']")
-          ?.addEventListener("click", openChangelog);
+          ?.addEventListener("click", (e) => {
+            e.preventDefault();
+            void openChangelog();
+          });
       });
     </script>
   </body>
 </html>
 
 <style is:global>
+  @font-face {
+    font-family: "Archivo Black";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/fonts/archivo-black-latin.woff2") format("woff2");
+  }
+
+  @font-face {
+    font-family: "Public Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/fonts/public-sans-latin.woff2") format("woff2");
+  }
+
+  @font-face {
+    font-family: "Public Sans";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("/fonts/public-sans-latin.woff2") format("woff2");
+  }
+
+  @font-face {
+    font-family: "Public Sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("/fonts/public-sans-latin.woff2") format("woff2");
+  }
+
+  @font-face {
+    font-family: "Public Sans";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("/fonts/public-sans-latin.woff2") format("woff2");
+  }
+
   *,
   *::before,
   *::after {

@@ -18,7 +18,7 @@ import Layout from "../layouts/Layout.astro";
   <header class="page-header">
     <div class="page-header-inner">
       <h1 class="page-title">Política de privacidad y aviso legal</h1>
-      <p class="page-sub">Última actualización: abril 2026</p>
+      <p class="page-sub">Última actualización: julio 2026</p>
       <p class="page-desc">
         Este documento explica cómo funciona IWTBI, qué hace con los datos que
         procesa y cuáles son los límites de su responsabilidad. Léelo antes de
@@ -52,8 +52,7 @@ import Layout from "../layouts/Layout.astro";
       <h2>Cómo funciona el análisis</h2>
       <p>
         Cuando introduces la URL de un repositorio, IWTBI lleva a cabo los
-        siguientes pasos de forma automática y en un entorno completamente
-        aislado:
+        siguientes pasos de forma automática en el servidor:
       </p>
       <ol class="legal-list">
         <li>
@@ -65,13 +64,13 @@ import Layout from "../layouts/Layout.astro";
           binarios y dependencias de terceros.
         </li>
         <li>
-          Lanza siete agentes de IA en paralelo, cada uno especializado en un
-          área: pila tecnológica, arquitectura, base de datos, API, frontend,
-          lógica de negocio y DevOps.
+          Lanza siete agentes especialistas en lotes de hasta tres llamadas:
+          pila tecnológica, arquitectura, base de datos, API, frontend, lógica
+          de negocio y DevOps.
         </li>
         <li>
-          Un sintetizador unifica las secciones en un documento final coherente
-          y bien estructurado.
+          Margaret Hamilton cruza las siete secciones, conserva su contenido y
+          añade el orden de construcción, los criterios globales y las incógnitas.
         </li>
         <li>
           El resultado se guarda en caché asociado al SHA del commit analizado.
@@ -146,16 +145,16 @@ import Layout from "../layouts/Layout.astro";
     <section class="legal-section">
       <h2>Privacidad y datos</h2>
       <p>
-        IWTBI procesa únicamente repositorios públicos de GitHub. No recopila
-        datos personales salvo los que el usuario proporciona de forma
-        voluntaria, como la dirección de correo electrónico para recibir una
-        notificación cuando el análisis esté listo.
+        IWTBI procesa repositorios públicos de GitHub. También trata la dirección
+        IP y datos técnicos básicos de la solicitud para proteger el servicio,
+        limitar abusos y diagnosticar errores. La dirección de correo electrónico
+        solo se solicita cuando el usuario pide una notificación.
       </p>
       <p>
-        Los correos electrónicos se utilizan exclusivamente para enviar la
-        notificación solicitada. No se ceden a terceros, no se almacenan más
-        allá del tiempo necesario para completar el envío y no se emplean con
-        ningún fin de marketing o seguimiento.
+        Los correos se envían mediante Resend, proveedor que procesa la dirección
+        para entregar el mensaje. Si eliges recibir avisos futuros, conservamos
+        la suscripción hasta que la canceles; si no, el correo se utiliza para la
+        notificación concreta. Los enlaces de baja caducan por seguridad.
       </p>
       <p>
         El análisis generado —el documento Markdown— se almacena en nuestra
@@ -205,43 +204,6 @@ import Layout from "../layouts/Layout.astro";
 </Layout>
 
 <style>
-  /* ── Navbar ── */
-  nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 32px;
-    height: 72px;
-    border-bottom: var(--border);
-    background: var(--white);
-    position: sticky;
-    top: 0;
-    z-index: 20;
-  }
-  .logo { font-family: var(--font-display); font-size: 1.1rem; }
-  .nav-links { display: flex; gap: 32px; font-size: 0.9rem; }
-  .nav-links a::before {
-    content: "";
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    background: var(--coral);
-    border-radius: 50%;
-    margin-right: 6px;
-    vertical-align: middle;
-  }
-  .nav-links a:hover { text-decoration: underline; font-weight: 600; }
-  .btn-nav {
-    background: var(--coral);
-    border: var(--border);
-    box-shadow: var(--shadow-dark);
-    padding: 8px 20px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    transition: transform 0.1s, box-shadow 0.1s;
-  }
-  .btn-nav:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--black); }
-
   /* ── Cabecera ── */
   .page-header {
     border-bottom: var(--border);
